@@ -19,10 +19,16 @@ public class GlobalNetwork {
      * @throws IOException If an I/O error occurs.
      */
     public void startServer(int port) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(port);
-        System.out.println("Waiting for opponent to connect...");
+        // Explicitly bind to 0.0.0.0 so we accept connections from any interface
+        ServerSocket serverSocket = new ServerSocket(
+            port,
+            50,
+            InetAddress.getByName("0.0.0.0")
+        );
+        System.out.println("Waiting for opponent to connect on port " + port + "...");
         this.socket = serverSocket.accept();
         System.out.println("Opponent connected.");
+        serverSocket.close();
         setUpStreams();
         this.isHost = true;
     }
@@ -34,7 +40,7 @@ public class GlobalNetwork {
      * @throws IOException If an I/O error occurs.
      */
     public void connectToHost(String host, int port) throws IOException {
-        System.out.println("Connecting to host...");
+        System.out.println("Connecting to host " + host + ":" + port + "...");
         this.socket = new Socket(host, port);
         System.out.println("Connected to host.");
         setUpStreams();
@@ -91,14 +97,19 @@ public class GlobalNetwork {
     public boolean isHost() {
         return isHost;
     }
-
+    
+    /**
+     * Demo main (optional):
+     */
     public static void main(String[] args) {
         GlobalNetwork globalNetwork = new GlobalNetwork();
         int choice = OpponentChooser.chooseOpponent();
         try {
             if (choice == 2) { // Global Friend
                 String[] options = {"Host", "Connect"};
-                int mode = JOptionPane.showOptionDialog(null, "Do you want to host or connect?", "Global Friend Mode", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+                int mode = JOptionPane.showOptionDialog(null, "Do you want to host or connect?", 
+                    "Global Friend Mode", JOptionPane.DEFAULT_OPTION, 
+                    JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
                 if (mode == 0) {
                     String port = JOptionPane.showInputDialog("Enter port to host:");
                     globalNetwork.startServer(Integer.parseInt(port));
