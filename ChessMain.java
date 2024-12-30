@@ -8,136 +8,98 @@ import javax.imageio.ImageIO;
 import java.net.*;
 
 /**
- * Main Chess application class with board-flipping logic when playing as Black.
+ * Main Chess application class with board-flipping logic 
+ * and multiple opponent modes (Computer, Local Friend, Global Friend).
  */
 public class ChessMain extends JPanel {
 
-    /**
-     * Main entry point.
-     */
-    public static void main(String[] args) {
-        boolean playWithComputer = OpponentChooser.chooseOpponent();
-        boolean playWithFriendOnline = !playWithComputer;
-    
-        final NetworkManager networkManager;
-        if (playWithFriendOnline) {
-            String[] friendOptions = {"Host", "Join"};
-            int friendChoice = JOptionPane.showOptionDialog(
-                null,
-                "Would you like to host a game or join a friend's game?",
-                "Multiplayer Setup",
-                JOptionPane.DEFAULT_OPTION,
-                JOptionPane.PLAIN_MESSAGE,
-                null,
-                friendOptions,
-                friendOptions[0]
-            );
-    
-            NetworkManager tempManager = new NetworkManager();
-            boolean success = false;
-            if (friendChoice == 0) {
-                success = tempManager.startServer();
-            } else {
-                String hostIP = JOptionPane.showInputDialog("Enter the host's IP address:");
-                if (hostIP != null && !hostIP.trim().isEmpty()) {
-                    success = tempManager.connectToHost(hostIP.trim());
-                }
-            }
-    
-            if(!success) {
-                JOptionPane.showMessageDialog(null, "Unable to establish multiplayer connection. Exiting.");
-                System.exit(0);
-            }
-            networkManager = tempManager;
-        } else {
-            networkManager = null;
-        }
-    
-        SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Chess");
-            // We pass a flag isBlackPerspective = (we are the client in online mode)
-            // i.e., if networkManager != null && !networkManager.isServer()
-            boolean isBlackPerspective = false;
-            if (playWithFriendOnline && networkManager != null && !networkManager.isServer()) {
-                // Client side -> black
-                isBlackPerspective = true;
-            }
-            
-            ChessMain panel = new ChessMain(playWithComputer, playWithFriendOnline, networkManager, isBlackPerspective);
-            frame.add(panel);
-            frame.pack();
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-        });
-    }
-    
-
-    // --- Inner helper classes for demonstration. In practice, put these in separate files. ---
-
-    /**
-     * OpponentChooser prompts the user to choose between Friend or Computer.
-     */
+    // -----------------------------------------------------------------
+    // 1) Opponent chooser that returns 0, 1, or 2
+    // -----------------------------------------------------------------
     static class OpponentChooser {
-        public static boolean chooseOpponent() {
-            String[] options = {"Friend", "Computer"};
+        
+        /**
+         * Returns:
+         *    0 -> Play vs Computer
+         *    1 -> Local Friend
+         *    2 -> Global Friend (network)
+         */
+        public static int chooseOpponent() {
+            String[] options = { "Computer", "Local Friend", "Global Friend" };
             int choice = JOptionPane.showOptionDialog(
-                null,
-                "Would you like to play with a friend or with the computer?",
-                "Choose Opponent",
-                JOptionPane.DEFAULT_OPTION,
-                JOptionPane.PLAIN_MESSAGE,
-                null,
-                options,
-                options[0]
+                    null,
+                    "Choose Your Opponent:",
+                    "Opponent Setup",
+                    JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.PLAIN_MESSAGE,
+                    null,
+                    options,
+                    options[0]
             );
-            // true if "Computer" chosen, false if "Friend"
-            return (choice == 1); 
+            // If user closes dialog or presses ESC, default to 0 (Computer)
+            if (choice < 0) {
+                choice = 0;
+            }
+            return choice;
         }
     }
 
-    /**
-     * NetworkManager handles connections between two players over the network.
-     */
-    static class NetworkManager {
+    // -----------------------------------------------------------------
+    // 2) GlobalNetwork class (adapted from old NetworkManager),
+    //    matching the method signatures from snippet #1
+    // -----------------------------------------------------------------
+    static class GlobalNetwork {
+        private boolean isHost;      // true if we started the server
         private Socket socket;
+        private ServerSocket serverSocket; // keep reference if we are the host
         private BufferedReader in;
         private PrintWriter out;
-        private boolean isServer;
 
-        public boolean startServer() {
-            isServer = true;
-            try {
-                ServerSocket serverSocket = new ServerSocket(5000);
-                JOptionPane.showMessageDialog(null, "Hosting a game... Waiting for a friend to connect on port 5000.");
-                socket = serverSocket.accept();
-                serverSocket.close();
-                setUpStreams();
-                JOptionPane.showMessageDialog(null, "Friend connected!");
-                return true;
-            } catch (IOException e) {
-                JOptionPane.showMessageDialog(null, "Error starting server: " + e.getMessage());
-                return false;
-            }
+        public boolean isHost() {
+            return isHost;
         }
 
-        public boolean connectToHost(String host) {
-            isServer = false;
-            try {
-                JOptionPane.showMessageDialog(null, "Connecting to " + host + " on port 5000...");
-                socket = new Socket(host, 5000);
-                setUpStreams();
-                JOptionPane.showMessageDialog(null, "Connected to friend!");
-                return true;
-            } catch (IOException e) {
-                JOptionPane.showMessageDialog(null, "Error connecting to host: " + e.getMessage());
-                return false;
-            }
+        public void startServer(int port) throws IOException {
+            isHost = true;
+            serverSocket = new ServerSocket(port);
+            JOptionPane.showMessageDialog(null, 
+                    "Hosting a game... Waiting for a friend to connect on port " + port + ".");
+            socket = serverSocket.accept();
+            serverSocket.close();
+            setupStreams();
+            JOptionPane.showMessageDialog(null, "Friend connected!");
         }
 
-        private void setUpStreams() throws IOException {
+        public void connectToHost(String host, int port) throws IOException {
+            isHost = false;
+            JOptionPane.showMessageDialog(null, 
+                    "Connecting to " + host + " on port " + port + "...");
+            socket = new Socket(host, port);
+            setupStreams();
+            JOptionPane.showMessageDialog(null, "Connected to friend!");
+        }
+
+        private void setupStreams() throws IOException {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
+        }
+
+        // receiveMove() signature throws IOException, ClassNotFoundException
+        public int[] receiveMove() throws IOException, ClassNotFoundException {
+            String line = in.readLine();
+            if (line == null) {
+                return null;
+            }
+            String[] parts = line.split(",");
+            if (parts.length != 4) {
+                return null;
+            }
+            return new int[]{
+                    Integer.parseInt(parts[0]),
+                    Integer.parseInt(parts[1]),
+                    Integer.parseInt(parts[2]),
+                    Integer.parseInt(parts[3])
+            };
         }
 
         public void sendMove(int fromX, int fromY, int toX, int toY) {
@@ -145,223 +107,261 @@ public class ChessMain extends JPanel {
                 out.println(fromX + "," + fromY + "," + toX + "," + toY);
             }
         }
-
-        public int[] receiveMove() {
-            try {
-                String line = in.readLine();
-                if (line == null) return null;
-                String[] parts = line.split(",");
-                if (parts.length != 4) return null;
-                return new int[]{
-                    Integer.parseInt(parts[0]),
-                    Integer.parseInt(parts[1]),
-                    Integer.parseInt(parts[2]),
-                    Integer.parseInt(parts[3])
-                };
-            } catch (IOException | NumberFormatException e) {
-                return null;
-            }
-        }
-
-        public void close() {
-            try {
-                if (socket != null) socket.close();
-            } catch (IOException ignored) {}
-        }
-
-        public boolean isServer() {
-            return isServer;
-        }
     }
 
-    // --- Fields ---
+    // -----------------------------------------------------------------
+    // 3) Main entry point
+    // -----------------------------------------------------------------
+    public static void main(String[] args) {
+        // Make these final or effectively final so they can be used in the lambda
+        final int opponentChoice = OpponentChooser.chooseOpponent();
+        final GlobalNetwork globalNetwork;  // Single declaration, assigned once
 
+        // If user chooses Global Friend, set up server/host or connect
+        if (opponentChoice == 2) {
+            // We instantiate GlobalNetwork exactly once
+            globalNetwork = new GlobalNetwork();
+
+            String[] options = {"Host", "Connect"};
+            int mode = JOptionPane.showOptionDialog(
+                null,
+                "Do you want to host or connect?",
+                "Global Friend Mode",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null,
+                options,
+                options[0]
+            );
+            try {
+                if (mode == 0) { // Host
+                    String portStr = JOptionPane.showInputDialog("Enter port to host (e.g. 5000):");
+                    int port = (portStr == null || portStr.isEmpty()) ? 5000 : Integer.parseInt(portStr);
+                    globalNetwork.startServer(port);
+                } else {         // Connect
+                    String host = JOptionPane.showInputDialog("Enter host IP address:");
+                    String portStr = JOptionPane.showInputDialog("Enter port to connect (e.g. 5000):");
+                    int port = (portStr == null || portStr.isEmpty()) ? 5000 : Integer.parseInt(portStr);
+                    globalNetwork.connectToHost(host, port);
+                }
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(
+                        null, 
+                        "An error occurred: " + e.getMessage(), 
+                        "Error", 
+                        JOptionPane.ERROR_MESSAGE
+                );
+                System.exit(0);
+            }
+        } else {
+            // If not playing Global Friend, we set it to null
+            globalNetwork = null;
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Chess");
+            // If we are in global mode and NOT the host, that means we are black perspective
+            boolean isBlackPerspective = (globalNetwork != null && !globalNetwork.isHost());
+            // Use the constructor that takes opponentChoice + globalNetwork
+            ChessMain panel = new ChessMain(opponentChoice, globalNetwork, isBlackPerspective);
+            frame.add(panel);
+            frame.pack();
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        });
+    }
+
+    // -----------------------------------------------------------------
+    // 4) Fields to handle which mode we are in
+    // -----------------------------------------------------------------
     static final int TILE_SIZE = 80;
     static final int BOARD_SIZE = TILE_SIZE * 8;
 
+    // Colors
     static final Color LIGHT_SQ_COLOR = new Color(240,217,181);
     static final Color DARK_SQ_COLOR = new Color(181,136,99);
     static final Color HIGHLIGHT_COLOR = new Color(186,202,43,100);
     static final Color CHECK_COLOR = new Color(255,0,0,100);
 
-    boolean playWithComputer; 
-    boolean playWithFriendOnline; 
-    NetworkManager networkManager; 
-    boolean isMyTurn = true; // If network play, determines who starts first
+    // Booleans for modes
+    boolean playWithComputer;   
+    boolean playWithLocalFriend; 
+    boolean playWithGlobalFriend; 
 
-    // ADDED/CHANGED FOR FLIPPED BOARD
-    /** 
-     * If true, we invert row/column coordinates so that the board is viewed from Black's perspective. 
-     */
+    // The network object if playing global
+    GlobalNetwork globalNetwork; 
+    // Whose turn in global mode: only interact if isMyTurn
+    boolean isMyTurn = true; 
+
+    // Board perspective
     boolean isBlackPerspective;  
 
+    // Images + game state
     Map<String, BufferedImage> images = new HashMap<>();
     ChessGame game = new ChessGame();
     int[] selectedSquare = null;
     java.util.List<int[]> legalMoves = new ArrayList<>();
 
-    // Constructor
-    public ChessMain(boolean playWithComputer, 
-                     boolean playWithFriendOnline, 
-                     NetworkManager networkManager,
-                     boolean isBlackPerspective) {
-        this.playWithComputer = playWithComputer;
-        this.playWithFriendOnline = playWithFriendOnline;
-        this.networkManager = networkManager;
-        this.isBlackPerspective = isBlackPerspective;  // set our local flag
+    // -----------------------------------------------------------------
+    // 5) Constructor for ChessMain
+    // -----------------------------------------------------------------
+    public ChessMain(int opponentChoice, GlobalNetwork globalNetwork, boolean isBlackPerspective) {
+        // Convert that integer choice into booleans
+        this.playWithComputer    = (opponentChoice == 0);
+        this.playWithLocalFriend = (opponentChoice == 1);
+        this.playWithGlobalFriend= (opponentChoice == 2);
+        this.globalNetwork       = globalNetwork;
+        this.isBlackPerspective  = isBlackPerspective;
 
         loadPieceImages();
         setPreferredSize(new Dimension(BOARD_SIZE, BOARD_SIZE));
 
-        // If playing online, determine turn order based on server/client role
-        if (playWithFriendOnline && networkManager != null) {
-            // Server is white and starts first
-            isMyTurn = networkManager.isServer();
+        // If we’re playing globally, set turn order based on “host”
+        if (playWithGlobalFriend && globalNetwork != null) {
+            isMyTurn = globalNetwork.isHost();  
             if (!isMyTurn) {
-                // If not my turn, start listening for the opponent's move
-                startListeningForMoves();
+                // If not my turn, wait for opponent’s move
+                startListeningForMoves(globalNetwork);
             }
         }
 
-        addMouseListener(new MouseAdapter(){
+        addMouseListener(new MouseAdapter() {
             @Override
-            public void mousePressed(MouseEvent e){
-                if (playWithFriendOnline && !isMyTurn) {
-                    // If networked and not my turn, ignore clicks
+            public void mousePressed(MouseEvent e) {
+                // If global friend mode and not my turn, ignore clicks
+                if (playWithGlobalFriend && !isMyTurn) {
                     return;
                 }
-
-                // Convert screen coords to board coords
-                int row = e.getY() / TILE_SIZE;
-                int col = e.getX() / TILE_SIZE;
-
-                // ADDED/CHANGED FOR FLIPPED BOARD
-                // If black perspective is on, invert row/col.
-                if (isBlackPerspective) {
-                    row = 7 - row;
-                    col = 7 - col;
-                }
-
-                if(selectedSquare == null){
-                    // Select a piece
-                    Piece piece = game.board[row][col];
-                    if(piece != null && piece.color.equals(game.toMove)){
-                        selectedSquare = new int[]{row,col};
-                        legalMoves = game.getLegalMovesForPiece(row,col);
-                    } else {
-                        selectedSquare = null;
-                        legalMoves = new ArrayList<>();
-                    }
-                } else {
-                    // Attempt a move
-                    boolean found = false;
-                    for(int[] mv : legalMoves) {
-                        if(mv[0] == row && mv[1] == col) {
-                            found = true; 
-                            break;
-                        }
-                    }
-                    if(found) {
-                        int fx = selectedSquare[0], fy = selectedSquare[1];
-                        game.makeMove(fx,fy,row,col);
-
-                        // If online, send this move to opponent
-                        if(playWithFriendOnline && networkManager != null) {
-                            networkManager.sendMove(fx, fy, row, col);
-                            isMyTurn = false;
-                            startListeningForMoves(); 
-                        }
-
-                        selectedSquare = null;
-                        legalMoves = new ArrayList<>();
-                        String state = game.isGameOver();
-                        if(state != null) {
-                            if(state.equals("checkmate")){
-                                System.out.println("Checkmate! " + (game.toMove.equals("black")?"White":"Black")+" wins!");
-                            } else if(state.equals("stalemate")) {
-                                System.out.println("Stalemate! Draw.");
-                            }
-                        } else {
-                            // If playing with the computer and it's now computer's turn, implement AI logic
-                            if(playWithComputer && game.toMove.equals("black")) {
-                                // TODO: Implement AI logic here
-                            }
-                        }
-                    } else {
-                        // Maybe select another piece or deselect
-                        Piece piece = game.board[row][col];
-                        if(piece != null && piece.color.equals(game.toMove)) {
-                            selectedSquare = new int[]{row,col};
-                            legalMoves = game.getLegalMovesForPiece(row,col);
-                        } else {
-                            selectedSquare = null;
-                            legalMoves = new ArrayList<>();
-                        }
-                    }
-                }
-                repaint();
+                // Otherwise, handle the local click => either local friend or single-player
+                handleMousePress(e);
             }
         });
     }
 
-    // Start a thread to listen for the opponent's move in network play
-    private void startListeningForMoves() {
-        new Thread(() -> {
-            int[] move = networkManager.receiveMove();
-            if(move == null) {
-                JOptionPane.showMessageDialog(null, "Connection lost or invalid move received.");
-                return;
+    /**
+     * Handle the mouse press for either local or single-player modes.
+     * (Global mode is the same, except we also send moves.)
+     */
+    private void handleMousePress(MouseEvent e) {
+        // Convert screen coords to board coords
+        int row = e.getY() / TILE_SIZE;
+        int col = e.getX() / TILE_SIZE;
+
+        // If black perspective is on, invert row/col
+        if (isBlackPerspective) {
+            row = 7 - row;
+            col = 7 - col;
+        }
+
+        if (selectedSquare == null) {
+            // Select a piece
+            Piece piece = game.board[row][col];
+            if (piece != null && piece.color.equals(game.toMove)) {
+                selectedSquare = new int[]{row, col};
+                legalMoves = game.getLegalMovesForPiece(row, col);
+            } else {
+                selectedSquare = null;
+                legalMoves = new ArrayList<>();
             }
-            int fromX = move[0], fromY = move[1], toX = move[2], toY = move[3];
-            SwingUtilities.invokeLater(() -> {
-                game.makeMove(fromX, fromY, toX, toY);
-                String state = game.isGameOver();
-                if(state != null) {
-                    if(state.equals("checkmate")){
-                        System.out.println("Checkmate! " + (game.toMove.equals("black")?"White":"Black")+" wins!");
-                    } else if(state.equals("stalemate")) {
-                        System.out.println("Stalemate! Draw.");
-                    }
+        } else {
+            // Attempt a move
+            boolean found = false;
+            for (int[] mv : legalMoves) {
+                if (mv[0] == row && mv[1] == col) {
+                    found = true;
+                    break;
                 }
-                isMyTurn = true;
-                repaint();
-            });
-        }).start();
+            }
+            if (found) {
+                int fx = selectedSquare[0], fy = selectedSquare[1];
+                game.makeMove(fx, fy, row, col);
+
+                // If global friend mode, send move to opponent
+                if (playWithGlobalFriend && globalNetwork != null) {
+                    globalNetwork.sendMove(fx, fy, row, col);
+                    isMyTurn = false;
+                    startListeningForMoves(globalNetwork);
+                }
+
+                selectedSquare = null;
+                legalMoves = new ArrayList<>();
+                checkGameOverState();
+            } else {
+                // Maybe select another piece or deselect
+                Piece piece = game.board[row][col];
+                if (piece != null && piece.color.equals(game.toMove)) {
+                    selectedSquare = new int[]{row, col};
+                    legalMoves = game.getLegalMovesForPiece(row, col);
+                } else {
+                    selectedSquare = null;
+                    legalMoves = new ArrayList<>();
+                }
+            }
+        }
+        repaint();
     }
 
-    void loadPieceImages(){
-        String[] names = {"pawn","rook","knight","bishop","queen","king"};
-        String[] colors = {"white","black"};
-        for(String c:colors){
-            for(String n:names){
-                String key = c + "_" + n;
-                try {
-                    BufferedImage img = ImageIO.read(new File("images/"+key+".png"));
-                    Image scaled = img.getScaledInstance(TILE_SIZE-10, TILE_SIZE-10, Image.SCALE_SMOOTH);
-                    BufferedImage buffered = new BufferedImage(TILE_SIZE-10, TILE_SIZE-10, BufferedImage.TYPE_INT_ARGB);
-                    Graphics2D g2 = buffered.createGraphics();
-                    g2.drawImage(scaled,0,0,null);
-                    g2.dispose();
-                    images.put(key,buffered);
-                } catch(IOException ex){
-                    System.err.println("Failed to load image: "+key);
-                }
+    /**
+     * Checks if the game is over (checkmate/stalemate).
+     * Also, if playing with the computer, could trigger AI move here.
+     */
+    private void checkGameOverState() {
+        String state = game.isGameOver();
+        if (state != null) {
+            if (state.equals("checkmate")) {
+                System.out.println("Checkmate! " 
+                    + (game.toMove.equals("black") ? "White" : "Black") + " wins!");
+            } else if (state.equals("stalemate")) {
+                System.out.println("Stalemate! Draw.");
+            }
+        } else {
+            // If playing with the computer and it's now the computer's turn, we could implement AI logic
+            if (playWithComputer && game.toMove.equals("black")) {
+                // TODO: Implement your AI logic here if desired
             }
         }
     }
 
+    /**
+     * If we’re the client in global mode, we wait for the host to send moves.
+     */
+    private void startListeningForMoves(GlobalNetwork globalNetwork) {
+        new Thread(() -> {
+            try {
+                int[] move = globalNetwork.receiveMove();
+                if (move == null) {
+                    throw new IOException("Connection lost or invalid data.");
+                }
+                SwingUtilities.invokeLater(() -> {
+                    game.makeMove(move[0], move[1], move[2], move[3]);
+                    checkGameOverState();
+                    isMyTurn = true;
+                    repaint();
+                });
+            } catch (IOException | ClassNotFoundException e) {
+                JOptionPane.showMessageDialog(null, 
+                        "Connection lost: " + e.getMessage(), 
+                        "Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                System.exit(0);
+            }
+        }).start();
+    }
+
+    // -----------------------------------------------------------------
+    // 6) Drawing code
+    // -----------------------------------------------------------------
     @Override
-    protected void paintComponent(Graphics g){
+    protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
         // Draw board squares
-        for(int i=0;i<8;i++){
-            for(int j=0;j<8;j++){
-                // ADDED/CHANGED FOR FLIPPED BOARD:
-                // For drawing, we figure out which "visual" row/col we want to use.
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                // For drawing, figure out the "visual" row/col if black perspective
                 int drawRow = isBlackPerspective ? 7 - i : i;
                 int drawCol = isBlackPerspective ? 7 - j : j;
-
                 Color color = ((i + j) % 2 == 0) ? LIGHT_SQ_COLOR : DARK_SQ_COLOR;
                 g.setColor(color);
                 g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -369,18 +369,18 @@ public class ChessMain extends JPanel {
         }
 
         // Highlight king in check
-        if(game.isInCheck(game.toMove)){
+        if (game.isInCheck(game.toMove)) {
             int[] kingPos = null;
-            outer: for(int i=0;i<8;i++){
-                for(int j=0;j<8;j++){
-                    Piece p=game.board[i][j];
-                    if(p!=null && p instanceof King && p.color.equals(game.toMove)){
-                        kingPos = new int[]{i,j};
+            outer: for (int i = 0; i < 8; i++) {
+                for (int j = 0; j < 8; j++) {
+                    Piece p = game.board[i][j];
+                    if (p != null && p instanceof King && p.color.equals(game.toMove)) {
+                        kingPos = new int[]{ i, j };
                         break outer;
                     }
                 }
             }
-            if(kingPos!=null) {
+            if (kingPos != null) {
                 int drawRow = isBlackPerspective ? 7 - kingPos[0] : kingPos[0];
                 int drawCol = isBlackPerspective ? 7 - kingPos[1] : kingPos[1];
                 g.setColor(CHECK_COLOR);
@@ -389,9 +389,9 @@ public class ChessMain extends JPanel {
         }
 
         // Highlight legal moves (if any)
-        if(selectedSquare != null && !legalMoves.isEmpty()){
+        if (selectedSquare != null && !legalMoves.isEmpty()) {
             g.setColor(HIGHLIGHT_COLOR);
-            for(int[] mv:legalMoves){
+            for (int[] mv : legalMoves) {
                 int drawRow = isBlackPerspective ? 7 - mv[0] : mv[0];
                 int drawCol = isBlackPerspective ? 7 - mv[1] : mv[1];
                 g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -399,33 +399,57 @@ public class ChessMain extends JPanel {
         }
 
         // Draw pieces
-        for(int i=0;i<8;i++){
-            for(int j=0;j<8;j++){
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
                 Piece piece = game.board[i][j];
-                if(piece != null){
+                if (piece != null) {
                     String key = piece.color + "_" + piece.getClass().getSimpleName().toLowerCase();
                     BufferedImage img = images.get(key);
-                    if(img!=null) {
-                        // ADDED/CHANGED FOR FLIPPED BOARD
+                    if (img != null) {
                         int drawRow = isBlackPerspective ? 7 - i : i;
                         int drawCol = isBlackPerspective ? 7 - j : j;
-                        g.drawImage(img, drawCol*TILE_SIZE + 5, drawRow*TILE_SIZE + 5, null);
+                        g.drawImage(img, drawCol * TILE_SIZE + 5, drawRow * TILE_SIZE + 5, null);
                     }
                 }
             }
         }
 
-        // Highlight selected piece (if any)
-        if(selectedSquare != null) {
+        // Highlight selected piece
+        if (selectedSquare != null) {
             int drawRow = isBlackPerspective ? 7 - selectedSquare[0] : selectedSquare[0];
             int drawCol = isBlackPerspective ? 7 - selectedSquare[1] : selectedSquare[1];
-            g.setColor(new Color(0,255,0,100));
+            g.setColor(new Color(0, 255, 0, 100));
             g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
     }
 
-    // --- Piece and ChessGame classes remain largely the same as your original ---
+    // -----------------------------------------------------------------
+    // 7) Load piece images from "images/???.png"
+    // -----------------------------------------------------------------
+    void loadPieceImages() {
+        String[] names = {"pawn","rook","knight","bishop","queen","king"};
+        String[] colors = {"white","black"};
+        for (String c : colors) {
+            for (String n : names) {
+                String key = c + "_" + n;
+                try {
+                    BufferedImage img = ImageIO.read(new File("images/" + key + ".png"));
+                    Image scaled = img.getScaledInstance(TILE_SIZE - 10, TILE_SIZE - 10, Image.SCALE_SMOOTH);
+                    BufferedImage buffered = new BufferedImage(TILE_SIZE - 10, TILE_SIZE - 10, BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D g2 = buffered.createGraphics();
+                    g2.drawImage(scaled, 0, 0, null);
+                    g2.dispose();
+                    images.put(key, buffered);
+                } catch (IOException ex) {
+                    System.err.println("Failed to load image: " + key);
+                }
+            }
+        }
+    }
 
+    // -----------------------------------------------------------------
+    // 8) Piece definitions (Pawn, Rook, Knight, etc.)
+    // -----------------------------------------------------------------
     abstract static class Piece {
         String color;
         boolean hasMoved = false;
@@ -445,6 +469,7 @@ public class ChessMain extends JPanel {
             int startRank = color.equals("white") ? 6 : 1;
             int forwardX = x + direction;
             if (forwardX >=0 && forwardX < 8) {
+                // forward
                 if (board[forwardX][y] == null) {
                     moves.add(new int[]{forwardX, y});
                     // double move
@@ -454,8 +479,9 @@ public class ChessMain extends JPanel {
                 }
                 // captures
                 for (int dy : new int[]{-1,1}) {
-                    int ny = y+dy;
-                    if (ny>=0 && ny<8 && board[forwardX][ny]!=null && !board[forwardX][ny].color.equals(color)) {
+                    int ny = y + dy;
+                    if (ny>=0 && ny<8 && board[forwardX][ny]!=null 
+                            && !board[forwardX][ny].color.equals(color)) {
                         moves.add(new int[]{forwardX, ny});
                     }
                 }
@@ -479,10 +505,13 @@ public class ChessMain extends JPanel {
                     if (board[nx][ny]==null) {
                         moves.add(new int[]{nx,ny});
                     } else {
-                        if(!board[nx][ny].color.equals(color)) moves.add(new int[]{nx,ny});
+                        if(!board[nx][ny].color.equals(color)) {
+                            moves.add(new int[]{nx,ny});
+                        }
                         break;
                     }
-                    nx+=dx; ny+=dy;
+                    nx+=dx; 
+                    ny+=dy;
                 }
             }
             return moves;
@@ -523,10 +552,13 @@ public class ChessMain extends JPanel {
                     if(board[nx][ny]==null) {
                         moves.add(new int[]{nx,ny});
                     } else {
-                        if(!board[nx][ny].color.equals(color)) moves.add(new int[]{nx,ny});
+                        if(!board[nx][ny].color.equals(color)) {
+                            moves.add(new int[]{nx,ny});
+                        }
                         break;
                     }
-                    nx+=dx; ny+=dy;
+                    nx+=dx; 
+                    ny+=dy;
                 }
             }
             return moves;
@@ -551,10 +583,13 @@ public class ChessMain extends JPanel {
                     if(board[nx][ny]==null) {
                         moves.add(new int[]{nx,ny});
                     } else {
-                        if(!board[nx][ny].color.equals(color)) moves.add(new int[]{nx,ny});
+                        if(!board[nx][ny].color.equals(color)) {
+                            moves.add(new int[]{nx,ny});
+                        }
                         break;
                     }
-                    nx+=dx; ny+=dy;
+                    nx+=dx; 
+                    ny+=dy;
                 }
             }
             return moves;
@@ -583,6 +618,9 @@ public class ChessMain extends JPanel {
         }
     }
 
+    // -----------------------------------------------------------------
+    // 9) ChessGame class, as in original
+    // -----------------------------------------------------------------
     static class ChessGame {
         Piece[][] board;
         String toMove = "white";
@@ -674,7 +712,9 @@ public class ChessMain extends JPanel {
                     // King side
                     if(board[7][7] instanceof Rook && !board[7][7].hasMoved){
                         if(board[7][5]==null && board[7][6]==null){
-                            if(!squareAttackedBy(7,4,"black") && !squareAttackedBy(7,5,"black") && !squareAttackedBy(7,6,"black")){
+                            if(!squareAttackedBy(7,4,"black") && 
+                               !squareAttackedBy(7,5,"black") && 
+                               !squareAttackedBy(7,6,"black")) {
                                 moves.add(new int[]{7,6});
                             }
                         }
@@ -682,17 +722,21 @@ public class ChessMain extends JPanel {
                     // Queen side
                     if(board[7][0] instanceof Rook && !board[7][0].hasMoved){
                         if(board[7][1]==null && board[7][2]==null && board[7][3]==null){
-                            if(!squareAttackedBy(7,4,"black") && !squareAttackedBy(7,3,"black") && !squareAttackedBy(7,2,"black")){
+                            if(!squareAttackedBy(7,4,"black") && 
+                               !squareAttackedBy(7,3,"black") && 
+                               !squareAttackedBy(7,2,"black")) {
                                 moves.add(new int[]{7,2});
                             }
                         }
                     }
                 }
-                if(piece.color.equals("black") && x==0 && y==4){
+                if(piece.color.equals("black") && x==-7 && y==4){
                     // King side
                     if(board[0][7] instanceof Rook && !board[0][7].hasMoved){
                         if(board[0][5]==null && board[0][6]==null){
-                            if(!squareAttackedBy(0,4,"white") && !squareAttackedBy(0,5,"white") && !squareAttackedBy(0,6,"white")){
+                            if(!squareAttackedBy(-7,4,"white") &&
+                               !squareAttackedBy(-7,5,"white") &&
+                               !squareAttackedBy(-7,6,"white")){
                                 moves.add(new int[]{0,6});
                             }
                         }
@@ -700,7 +744,9 @@ public class ChessMain extends JPanel {
                     // Queen side
                     if(board[0][0] instanceof Rook && !board[0][0].hasMoved){
                         if(board[0][1]==null && board[0][2]==null && board[0][3]==null){
-                            if(!squareAttackedBy(0,4,"white") && !squareAttackedBy(0,3,"white") && !squareAttackedBy(0,2,"white")){
+                            if(!squareAttackedBy(0,4,"white") &&
+                               !squareAttackedBy(0,3,"white") &&
+                               !squareAttackedBy(0,2,"white")){
                                 moves.add(new int[]{0,2});
                             }
                         }
@@ -742,6 +788,7 @@ public class ChessMain extends JPanel {
                     board[mx][my]=captured;
                     originalPiece.hasMoved=originalHasMoved;
 
+                    // revert castling if needed
                     if(piece instanceof King) {
                         if(my==y+2) {
                             board[x][7]=board[x][5];
@@ -754,8 +801,9 @@ public class ChessMain extends JPanel {
                             if(board[x][0]!=null) board[x][0].hasMoved=false;
                         }
                     }
+
+                    // revert en passant capture if needed
                     if(piece instanceof Pawn) {
-                        // If we performed an en passant capture, restore the captured pawn
                         if(oldEnPassant!=null && mx==oldEnPassant[0] && my==oldEnPassant[1] && captured==null) {
                             board[x][my] = new Pawn(piece.color.equals("white")?"black":"white");
                         }
@@ -768,6 +816,7 @@ public class ChessMain extends JPanel {
                 }
                 return legalMoves;
             } else {
+                // skipCheck == true => just return all moves
                 return moves;
             }
         }
@@ -778,9 +827,7 @@ public class ChessMain extends JPanel {
 
             // En passant
             if(piece instanceof Pawn) {
-                int direction = piece.color.equals("white")?-1:1;
                 if(enPassantTarget!=null && toX==enPassantTarget[0] && toY==enPassantTarget[1] && target==null) {
-                    // The captured pawn is just behind the target square
                     board[fromX][toY]=null;
                 }
             }
@@ -810,13 +857,13 @@ public class ChessMain extends JPanel {
                 }
             }
 
-            // En passant target
+            // Update enPassantTarget
             enPassantTarget=null;
             if(piece instanceof Pawn && Math.abs(toX - fromX)==2){
-                enPassantTarget=new int[]{(fromX+toX)/2,toY};
+                enPassantTarget=new int[]{(fromX+toX)/2, toY};
             }
 
-            // halfmove clock
+            // halfmoveClock
             if(piece instanceof Pawn || target!=null) {
                 halfmoveClock=0;
             } else {
@@ -856,6 +903,5 @@ public class ChessMain extends JPanel {
             }
             return moves;
         }
-        
     }
 }
