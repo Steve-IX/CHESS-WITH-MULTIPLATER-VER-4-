@@ -1,20 +1,27 @@
-import javax.swing.JOptionPane;
+import javax.swing.*;
+import java.io.*;
+import java.net.*;
 
+/**
+ * Manages opponent selection for the chess game.
+ */
 public class OpponentChooser {
 
-    public static boolean chooseOpponent() {
-        String[] options = {"Friend", "Computer"};
-        int choice = JOptionPane.showOptionDialog(
-            null,
-            "Would you like to play with a friend or with the computer?",
-            "Choose Opponent",
-            JOptionPane.DEFAULT_OPTION,
-            JOptionPane.PLAIN_MESSAGE,
-            null,
-            options,
-            options[0]
-        );
+    /**
+     * Displays a dialog to choose the opponent type.
+     * @return True for playing against the computer, false for playing against a friend.
+     */
+    public static int chooseOpponent() {
+        Object[] options = {"Computer", "Local Friend", "Global Friend"};
+        int choice = JOptionPane.showOptionDialog(null,
+                "Choose your opponent:",
+                "Opponent Selection",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null,
+                options,
+                options[0]);
 
-        return (choice == 1); // true if Computer, false if Friend
+        return choice;
     }
 }
