@@ -10,15 +10,27 @@ public class NetworkManager {
 
     /**
      * Starts a server waiting for a single client to connect.
-     * @return true if successfully connected to a client, false otherwise
+     * Listens on 0.0.0.0:5000 so that external connections can reach it.
      */
     public boolean startServer() {
         isServer = true;
         try {
-            ServerSocket serverSocket = new ServerSocket(5000);
-            JOptionPane.showMessageDialog(null, "Hosting a game... Waiting for a friend to connect on port 5000.");
+            // Bind to 0.0.0.0 so we accept incoming connections from ANY network interface
+            ServerSocket serverSocket = new ServerSocket(
+                5000,                       // port
+                50,                         // backlog (can be any integer buffer size)
+                InetAddress.getByName("0.0.0.0")  // listen on ALL interfaces
+            );
+            JOptionPane.showMessageDialog(null, 
+                "Hosting a game... Waiting for a friend to connect on port 5000."
+            );
+
+            // Accept exactly one client connection
             socket = serverSocket.accept();
+            
+            // Close the server socket once a connection is made (single-client model)
             serverSocket.close();
+
             setUpStreams();
             JOptionPane.showMessageDialog(null, "Friend connected!");
             return true;
@@ -29,14 +41,16 @@ public class NetworkManager {
     }
 
     /**
-     * Connects to a remote host.
+     * Connects to a remote host on port 5000.
      * @param host The IP or hostname to connect to
      * @return true if successfully connected, false otherwise
      */
     public boolean connectToHost(String host) {
         isServer = false;
         try {
-            JOptionPane.showMessageDialog(null, "Connecting to " + host + " on port 5000...");
+            JOptionPane.showMessageDialog(null, 
+                "Connecting to " + host + " on port 5000..."
+            );
             socket = new Socket(host, 5000);
             setUpStreams();
             JOptionPane.showMessageDialog(null, "Connected to friend!");
@@ -54,7 +68,7 @@ public class NetworkManager {
 
     /**
      * Sends a move to the other player.
-     * The move format could be a simple string like "fromX,fromY,toX,toY".
+     * Format: "fromX,fromY,toX,toY"
      */
     public void sendMove(int fromX, int fromY, int toX, int toY) {
         if (out != null) {
@@ -63,8 +77,8 @@ public class NetworkManager {
     }
 
     /**
-     * Receives a move from the other player. This is a blocking call.
-     * Returns an array of {fromX, fromY, toX, toY} or null if error.
+     * Receives a move (blocking call).
+     * Returns {fromX, fromY, toX, toY} or null if there's an error/EOF.
      */
     public int[] receiveMove() {
         try {
@@ -88,7 +102,9 @@ public class NetworkManager {
      */
     public void close() {
         try {
-            if (socket != null) socket.close();
+            if (socket != null) {
+                socket.close();
+            }
         } catch (IOException ignored) {}
     }
 
