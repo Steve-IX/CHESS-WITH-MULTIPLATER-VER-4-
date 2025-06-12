@@ -52,8 +52,8 @@ public class ChessMain extends JPanel {
         private boolean isHost;      // true if we started the server
         private Socket socket;
         private ServerSocket serverSocket; // keep reference if we are the host
-        private BufferedReader in;
-        private PrintWriter out;
+        private DataInputStream in;
+        private DataOutputStream out;
 
         public boolean isHost() {
             return isHost;
@@ -80,31 +80,26 @@ public class ChessMain extends JPanel {
         }
 
         private void setupStreams() throws IOException {
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new DataInputStream(socket.getInputStream());
+            out = new DataOutputStream(socket.getOutputStream());
         }
 
-        // receiveMove() signature throws IOException, ClassNotFoundException
-        public int[] receiveMove() throws IOException, ClassNotFoundException {
-            String line = in.readLine();
-            if (line == null) {
-                return null;
-            }
-            String[] parts = line.split(",");
-            if (parts.length != 4) {
-                return null;
-            }
-            return new int[]{
-                    Integer.parseInt(parts[0]),
-                    Integer.parseInt(parts[1]),
-                    Integer.parseInt(parts[2]),
-                    Integer.parseInt(parts[3])
-            };
+        // receiveMove() reads four integers representing a move
+        public int[] receiveMove() throws IOException {
+            int fromX = in.readInt();
+            int fromY = in.readInt();
+            int toX = in.readInt();
+            int toY = in.readInt();
+            return new int[]{fromX, fromY, toX, toY};
         }
 
-        public void sendMove(int fromX, int fromY, int toX, int toY) {
+        public void sendMove(int fromX, int fromY, int toX, int toY) throws IOException {
             if (out != null) {
-                out.println(fromX + "," + fromY + "," + toX + "," + toY);
+                out.writeInt(fromX);
+                out.writeInt(fromY);
+                out.writeInt(toX);
+                out.writeInt(toY);
+                out.flush();
             }
         }
     }
@@ -279,9 +274,16 @@ public class ChessMain extends JPanel {
 
                 // If global friend mode, send move to opponent
                 if (playWithGlobalFriend && globalNetwork != null) {
-                    globalNetwork.sendMove(fx, fy, row, col);
-                    isMyTurn = false;
-                    startListeningForMoves(globalNetwork);
+                    try {
+                        globalNetwork.sendMove(fx, fy, row, col);
+                        isMyTurn = false;
+                        startListeningForMoves(globalNetwork);
+                    } catch (IOException ex) {
+                        JOptionPane.showMessageDialog(null,
+                                "Failed to send move: " + ex.getMessage(),
+                                "Network Error",
+                                JOptionPane.ERROR_MESSAGE);
+                    }
                 }
 
                 selectedSquare = null;
@@ -339,7 +341,7 @@ public class ChessMain extends JPanel {
                     isMyTurn = true;
                     repaint();
                 });
-            } catch (IOException | ClassNotFoundException e) {
+            } catch (IOException e) {
                 JOptionPane.showMessageDialog(null, 
                         "Connection lost: " + e.getMessage(), 
                         "Error", 
@@ -730,13 +732,13 @@ public class ChessMain extends JPanel {
                         }
                     }
                 }
-                if(piece.color.equals("black") && x==-7 && y==4){
+                if(piece.color.equals("black") && x==0 && y==4){
                     // King side
                     if(board[0][7] instanceof Rook && !board[0][7].hasMoved){
                         if(board[0][5]==null && board[0][6]==null){
-                            if(!squareAttackedBy(-7,4,"white") &&
-                               !squareAttackedBy(-7,5,"white") &&
-                               !squareAttackedBy(-7,6,"white")){
+                            if(!squareAttackedBy(0,4,"white") &&
+                               !squareAttackedBy(0,5,"white") &&
+                               !squareAttackedBy(0,6,"white")){
                                 moves.add(new int[]{0,6});
                             }
                         }
