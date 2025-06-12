@@ -110,7 +110,25 @@ public class ChessMain extends JPanel {
     public static void main(String[] args) {
         // Make these final or effectively final so they can be used in the lambda
         final int opponentChoice = OpponentChooser.chooseOpponent();
+        final int difficultyChoice;
         final GlobalNetwork globalNetwork;  // Single declaration, assigned once
+
+        if (opponentChoice == 0) {
+            String[] diffs = {"Easy", "Medium", "Hard"};
+            int diff = JOptionPane.showOptionDialog(
+                    null,
+                    "Select AI Difficulty:",
+                    "Computer Difficulty",
+                    JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.PLAIN_MESSAGE,
+                    null,
+                    diffs,
+                    diffs[0]
+            );
+            difficultyChoice = diff < 0 ? 0 : diff;
+        } else {
+            difficultyChoice = 0;
+        }
 
         // If user chooses Global Friend, set up server/host or connect
         if (opponentChoice == 2) {
@@ -158,7 +176,7 @@ public class ChessMain extends JPanel {
             // If we are in global mode and NOT the host, that means we are black perspective
             boolean isBlackPerspective = (globalNetwork != null && !globalNetwork.isHost());
             // Use the constructor that takes opponentChoice + globalNetwork
-            ChessMain panel = new ChessMain(opponentChoice, globalNetwork, isBlackPerspective);
+            ChessMain panel = new ChessMain(opponentChoice, difficultyChoice, globalNetwork, isBlackPerspective);
             frame.add(panel);
             frame.pack();
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -181,8 +199,11 @@ public class ChessMain extends JPanel {
 
     // Booleans for modes
     boolean playWithComputer;   
-    boolean playWithLocalFriend; 
-    boolean playWithGlobalFriend; 
+    boolean playWithLocalFriend;
+    boolean playWithGlobalFriend;
+
+    // Difficulty: 0 easy, 1 medium, 2 hard
+    int aiDifficulty = 0;
 
     // The network object if playing global
     GlobalNetwork globalNetwork; 
@@ -201,13 +222,14 @@ public class ChessMain extends JPanel {
     // -----------------------------------------------------------------
     // 5) Constructor for ChessMain
     // -----------------------------------------------------------------
-    public ChessMain(int opponentChoice, GlobalNetwork globalNetwork, boolean isBlackPerspective) {
+    public ChessMain(int opponentChoice, int difficulty, GlobalNetwork globalNetwork, boolean isBlackPerspective) {
         // Convert that integer choice into booleans
         this.playWithComputer    = (opponentChoice == 0);
         this.playWithLocalFriend = (opponentChoice == 1);
         this.playWithGlobalFriend= (opponentChoice == 2);
         this.globalNetwork       = globalNetwork;
         this.isBlackPerspective  = isBlackPerspective;
+        this.aiDifficulty        = difficulty;
 
         loadPieceImages();
         setPreferredSize(new Dimension(BOARD_SIZE, BOARD_SIZE));
@@ -318,11 +340,111 @@ public class ChessMain extends JPanel {
                 System.out.println("Stalemate! Draw.");
             }
         } else {
-            // If playing with the computer and it's now the computer's turn, we could implement AI logic
+            // If playing with the computer and it's the computer's turn, trigger AI move
             if (playWithComputer && game.toMove.equals("black")) {
-                // TODO: Implement your AI logic here if desired
+                performComputerMove();
             }
         }
+    }
+
+    /** Perform the computer's move based on the selected difficulty. */
+    private void performComputerMove() {
+        int[][] move;
+        if (aiDifficulty == 0) {
+            move = pickRandomMove();
+        } else if (aiDifficulty == 1) {
+            move = computeBestMove(1);
+        } else {
+            move = computeBestMove(3);
+        }
+        if (move != null) {
+            game.makeMove(move[0][0], move[0][1], move[1][0], move[1][1]);
+            selectedSquare = null;
+            legalMoves.clear();
+            checkGameOverState();
+            repaint();
+        }
+    }
+
+    private int[][] pickRandomMove() {
+        java.util.List<int[][]> moves = game.getAllLegalMoves("black");
+        if (moves.isEmpty()) return null;
+        return moves.get(new java.util.Random().nextInt(moves.size()));
+    }
+
+    /** Compute the best move for black using minimax search. */
+    private int[][] computeBestMove(int depth) {
+        java.util.List<int[][]> moves = game.getAllLegalMoves("black");
+        int bestScore = Integer.MIN_VALUE;
+        int[][] best = null;
+        for (int[][] mv : moves) {
+            ChessGame copy = game.deepCopy();
+            copy.makeMove(mv[0][0], mv[0][1], mv[1][0], mv[1][1]);
+            int score = minimax(copy, depth - 1, Integer.MIN_VALUE, Integer.MAX_VALUE);
+            if (score > bestScore) {
+                bestScore = score;
+                best = mv;
+            }
+        }
+        return best;
+    }
+
+    private int minimax(ChessGame g, int depth, int alpha, int beta) {
+        String state = g.isGameOver();
+        if (depth == 0 || state != null) {
+            if ("checkmate".equals(state)) {
+                return g.toMove.equals("black") ? Integer.MIN_VALUE + depth : Integer.MAX_VALUE - depth;
+            }
+            return evaluateBoard(g);
+        }
+
+        boolean maximizing = g.toMove.equals("black");
+        java.util.List<int[][]> moves = g.getAllLegalMoves(g.toMove);
+        if (maximizing) {
+            int max = Integer.MIN_VALUE;
+            for (int[][] mv : moves) {
+                ChessGame copy = g.deepCopy();
+                copy.makeMove(mv[0][0], mv[0][1], mv[1][0], mv[1][1]);
+                int score = minimax(copy, depth - 1, alpha, beta);
+                max = Math.max(max, score);
+                alpha = Math.max(alpha, score);
+                if (beta <= alpha) break;
+            }
+            return max;
+        } else {
+            int min = Integer.MAX_VALUE;
+            for (int[][] mv : moves) {
+                ChessGame copy = g.deepCopy();
+                copy.makeMove(mv[0][0], mv[0][1], mv[1][0], mv[1][1]);
+                int score = minimax(copy, depth - 1, alpha, beta);
+                min = Math.min(min, score);
+                beta = Math.min(beta, score);
+                if (beta <= alpha) break;
+            }
+            return min;
+        }
+    }
+
+    private int evaluateBoard(ChessGame g) {
+        int score = 0;
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece p = g.board[i][j];
+                if (p != null) {
+                    int val = pieceValue(p);
+                    score += p.color.equals("white") ? -val : val;
+                }
+            }
+        }
+        return score;
+    }
+
+    private int pieceValue(Piece p) {
+        if (p instanceof Pawn) return 100;
+        if (p instanceof Knight || p instanceof Bishop) return 300;
+        if (p instanceof Rook) return 500;
+        if (p instanceof Queen) return 900;
+        return 0;
     }
 
     /**
@@ -654,6 +776,36 @@ public class ChessMain extends JPanel {
                     board[i][j] = null;
                 }
             }
+        }
+
+        ChessGame deepCopy() {
+            ChessGame cp = new ChessGame();
+            cp.board = new Piece[8][8];
+            for (int i = 0; i < 8; i++) {
+                for (int j = 0; j < 8; j++) {
+                    Piece p = this.board[i][j];
+                    if (p != null) {
+                        Piece np;
+                        if (p instanceof Pawn) np = new Pawn(p.color);
+                        else if (p instanceof Rook) np = new Rook(p.color);
+                        else if (p instanceof Knight) np = new Knight(p.color);
+                        else if (p instanceof Bishop) np = new Bishop(p.color);
+                        else if (p instanceof Queen) np = new Queen(p.color);
+                        else np = new King(p.color);
+                        np.hasMoved = p.hasMoved;
+                        cp.board[i][j] = np;
+                    } else {
+                        cp.board[i][j] = null;
+                    }
+                }
+            }
+            cp.toMove = this.toMove;
+            if (this.enPassantTarget != null) {
+                cp.enPassantTarget = new int[]{this.enPassantTarget[0], this.enPassantTarget[1]};
+            }
+            cp.halfmoveClock = this.halfmoveClock;
+            cp.fullmoveNumber = this.fullmoveNumber;
+            return cp;
         }
 
         boolean isInCheck(String color) {
