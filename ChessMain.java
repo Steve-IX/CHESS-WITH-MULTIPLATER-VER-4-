@@ -6,24 +6,108 @@ import java.util.*;
 import java.io.*;
 import javax.imageio.ImageIO;
 import java.net.*;
+import java.awt.geom.*;
 
 /**
- * Main Chess application class with board-flipping logic 
- * and multiple opponent modes (Computer, Local Friend, Global Friend).
+ * Modern Chess application with beautiful UI, smooth animations, and professional design
  */
 public class ChessMain extends JPanel {
 
     // -----------------------------------------------------------------
-    // 1) Opponent chooser that returns 0, 1, or 2
+    // 1) Enhanced Constants and Design Elements
+    // -----------------------------------------------------------------
+    static final int TILE_SIZE = 90;
+    static final int BOARD_SIZE = TILE_SIZE * 8;
+    static final int SIDEBAR_WIDTH = 280;
+    static final int WINDOW_HEIGHT = BOARD_SIZE + 40;
+    static final int ANIMATION_DURATION = 400; // milliseconds
+    
+    // Modern Color Palette
+    static final Color LIGHT_SQ_COLOR = new Color(240, 217, 181);
+    static final Color DARK_SQ_COLOR = new Color(181, 136, 99);
+    static final Color HIGHLIGHT_COLOR = new Color(255, 255, 102, 180);
+    static final Color LEGAL_MOVE_COLOR = new Color(50, 205, 50, 120);
+    static final Color CHECK_COLOR = new Color(220, 20, 60, 150);
+    static final Color SELECTED_COLOR = new Color(70, 130, 180, 150);
+    static final Color HOVER_COLOR = new Color(135, 206, 235, 80);
+    
+    // UI Colors
+    static final Color SIDEBAR_BG = new Color(45, 52, 62);
+    static final Color CARD_BG = new Color(60, 70, 85);
+    static final Color TEXT_PRIMARY = new Color(220, 220, 220);
+    static final Color TEXT_SECONDARY = new Color(160, 170, 180);
+    static final Color ACCENT_COLOR = new Color(76, 175, 80);
+    static final Color BORDER_COLOR = new Color(70, 80, 95);
+
+    // Animation and interaction
+    private Point hoverSquare = null;
+    private javax.swing.Timer animationTimer;
+    private PieceAnimation currentAnimation = null;
+    private long lastMoveTime = 0;
+
+    // -----------------------------------------------------------------
+    // 2) Animation System
+    // -----------------------------------------------------------------
+    private static class PieceAnimation {
+        Point fromSquare, toSquare;
+        Point startPixel, endPixel, currentPixel;
+        Piece piece;
+        long startTime;
+        boolean isComplete = false;
+        
+        PieceAnimation(Point from, Point to, Piece piece, boolean isBlackPerspective) {
+            this.fromSquare = from;
+            this.toSquare = to;
+            this.piece = piece;
+            this.startTime = System.currentTimeMillis();
+            
+            // Calculate screen positions
+            this.startPixel = squareToPixel(from, isBlackPerspective);
+            this.endPixel = squareToPixel(to, isBlackPerspective);
+            this.currentPixel = new Point(startPixel);
+        }
+        
+        void update() {
+            long elapsed = System.currentTimeMillis() - startTime;
+            float progress = Math.min(1.0f, elapsed / (float) ANIMATION_DURATION);
+            
+            // Smooth easing function
+            progress = easeInOutCubic(progress);
+            
+            currentPixel.x = (int) (startPixel.x + (endPixel.x - startPixel.x) * progress);
+            currentPixel.y = (int) (startPixel.y + (endPixel.y - startPixel.y) * progress);
+            
+            if (progress >= 1.0f) {
+                isComplete = true;
+            }
+        }
+        
+        private float easeInOutCubic(float t) {
+            return t < 0.5f ? 4 * t * t * t : 1 - (float) Math.pow(-2 * t + 2, 3) / 2;
+        }
+    }
+    
+    private static Point squareToPixel(Point square, boolean isBlackPerspective) {
+        int drawRow = isBlackPerspective ? 7 - square.x : square.x;
+        int drawCol = isBlackPerspective ? 7 - square.y : square.y;
+        return new Point(drawCol * TILE_SIZE + 5, drawRow * TILE_SIZE + 5);
+    }
+
+    // -----------------------------------------------------------------
+    // 3) Enhanced UI Components
+    // -----------------------------------------------------------------
+    private JPanel sidePanel;
+    private JLabel statusLabel;
+    private JLabel turnLabel;
+    private JLabel modeLabel;
+    private JTextArea moveHistoryArea;
+    private JLabel timerLabel;
+    private java.util.List<String> moveHistory = new ArrayList<>();
+
+    // -----------------------------------------------------------------
+    // 4) Opponent chooser (unchanged)
     // -----------------------------------------------------------------
     static class OpponentChooser {
-        
-        /**
-         * Returns:
-         *    0 -> Play vs Computer
-         *    1 -> Local Friend
-         *    2 -> Global Friend (network)
-         */
         public static int chooseOpponent() {
             String[] options = { "Computer", "Local Friend", "Global Friend" };
             int choice = JOptionPane.showOptionDialog(
@@ -36,7 +120,6 @@ public class ChessMain extends JPanel {
                     options,
                     options[0]
             );
-            // If user closes dialog or presses ESC, default to 0 (Computer)
             if (choice < 0) {
                 choice = 0;
             }
@@ -45,13 +128,12 @@ public class ChessMain extends JPanel {
     }
 
     // -----------------------------------------------------------------
-    // 2) GlobalNetwork class (adapted from old NetworkManager),
-    //    matching the method signatures from snippet #1
+    // 5) GlobalNetwork class (unchanged)
     // -----------------------------------------------------------------
     static class GlobalNetwork {
-        private boolean isHost;      // true if we started the server
+        private boolean isHost;
         private Socket socket;
-        private ServerSocket serverSocket; // keep reference if we are the host
+        private ServerSocket serverSocket;
         private DataInputStream in;
         private DataOutputStream out;
 
@@ -84,7 +166,6 @@ public class ChessMain extends JPanel {
             out = new DataOutputStream(socket.getOutputStream());
         }
 
-        // receiveMove() reads four integers representing a move
         public int[] receiveMove() throws IOException {
             int fromX = in.readInt();
             int fromY = in.readInt();
@@ -105,13 +186,12 @@ public class ChessMain extends JPanel {
     }
 
     // -----------------------------------------------------------------
-    // 3) Main entry point
+    // 6) Main entry point (enhanced)
     // -----------------------------------------------------------------
     public static void main(String[] args) {
-        // Make these final or effectively final so they can be used in the lambda
         final int opponentChoice = OpponentChooser.chooseOpponent();
         final int difficultyChoice;
-        final GlobalNetwork globalNetwork;  // Single declaration, assigned once
+        final GlobalNetwork globalNetwork;
 
         if (opponentChoice == 0) {
             String[] diffs = {"Easy", "Medium", "Hard"};
@@ -130,11 +210,8 @@ public class ChessMain extends JPanel {
             difficultyChoice = 0;
         }
 
-        // If user chooses Global Friend, set up server/host or connect
         if (opponentChoice == 2) {
-            // We instantiate GlobalNetwork exactly once
             globalNetwork = new GlobalNetwork();
-
             String[] options = {"Host", "Connect"};
             int mode = JOptionPane.showOptionDialog(
                 null,
@@ -147,11 +224,11 @@ public class ChessMain extends JPanel {
                 options[0]
             );
             try {
-                if (mode == 0) { // Host
+                if (mode == 0) {
                     String portStr = JOptionPane.showInputDialog("Enter port to host (e.g. 5000):");
                     int port = (portStr == null || portStr.isEmpty()) ? 5000 : Integer.parseInt(portStr);
                     globalNetwork.startServer(port);
-                } else {         // Connect
+                } else {
                     String host = JOptionPane.showInputDialog("Enter host IP address:");
                     String portStr = JOptionPane.showInputDialog("Enter port to connect (e.g. 5000):");
                     int port = (portStr == null || portStr.isEmpty()) ? 5000 : Integer.parseInt(portStr);
@@ -167,63 +244,60 @@ public class ChessMain extends JPanel {
                 System.exit(0);
             }
         } else {
-            // If not playing Global Friend, we set it to null
             globalNetwork = null;
         }
 
-        SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Chess");
-            // If we are in global mode and NOT the host, that means we are black perspective
-            boolean isBlackPerspective = (globalNetwork != null && !globalNetwork.isHost());
-            // Use the constructor that takes opponentChoice + globalNetwork
-            ChessMain panel = new ChessMain(opponentChoice, difficultyChoice, globalNetwork, isBlackPerspective);
-            frame.add(panel);
-            frame.pack();
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-        });
+        SwingUtilities.invokeLater(() -> createAndShowGUI(opponentChoice, difficultyChoice, globalNetwork));
+    }
+    
+    private static void createAndShowGUI(int opponentChoice, int difficultyChoice, GlobalNetwork globalNetwork) {
+        JFrame frame = new JFrame("Chess - Multiplayer Edition");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setResizable(false);
+        
+        boolean isBlackPerspective = (globalNetwork != null && !globalNetwork.isHost());
+        ChessMain chessPanel = new ChessMain(opponentChoice, difficultyChoice, globalNetwork, isBlackPerspective);
+        
+        // Create main layout
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBackground(SIDEBAR_BG);
+        
+        // Add chess board
+        chessPanel.setPreferredSize(new Dimension(BOARD_SIZE, BOARD_SIZE));
+        mainPanel.add(chessPanel, BorderLayout.CENTER);
+        
+        // Add sidebar
+        mainPanel.add(chessPanel.createSidePanel(), BorderLayout.EAST);
+        
+        frame.add(mainPanel);
+        frame.pack();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        
+        // Start animation timer
+        chessPanel.startAnimationTimer();
     }
 
     // -----------------------------------------------------------------
-    // 4) Fields to handle which mode we are in
+    // 7) Enhanced Fields
     // -----------------------------------------------------------------
-    static final int TILE_SIZE = 80;
-    static final int BOARD_SIZE = TILE_SIZE * 8;
-
-    // Colors
-    static final Color LIGHT_SQ_COLOR = new Color(240,217,181);
-    static final Color DARK_SQ_COLOR = new Color(181,136,99);
-    static final Color HIGHLIGHT_COLOR = new Color(186,202,43,100);
-    static final Color CHECK_COLOR = new Color(255,0,0,100);
-
-    // Booleans for modes
     boolean playWithComputer;   
     boolean playWithLocalFriend;
     boolean playWithGlobalFriend;
-
-    // Difficulty: 0 easy, 1 medium, 2 hard
     int aiDifficulty = 0;
-
-    // The network object if playing global
     GlobalNetwork globalNetwork; 
-    // Whose turn in global mode: only interact if isMyTurn
     boolean isMyTurn = true; 
-
-    // Board perspective
     boolean isBlackPerspective;  
 
-    // Images + game state
     Map<String, BufferedImage> images = new HashMap<>();
     ChessGame game = new ChessGame();
     int[] selectedSquare = null;
     java.util.List<int[]> legalMoves = new ArrayList<>();
 
     // -----------------------------------------------------------------
-    // 5) Constructor for ChessMain
+    // 8) Enhanced Constructor
     // -----------------------------------------------------------------
     public ChessMain(int opponentChoice, int difficulty, GlobalNetwork globalNetwork, boolean isBlackPerspective) {
-        // Convert that integer choice into booleans
         this.playWithComputer    = (opponentChoice == 0);
         this.playWithLocalFriend = (opponentChoice == 1);
         this.playWithGlobalFriend= (opponentChoice == 2);
@@ -231,88 +305,230 @@ public class ChessMain extends JPanel {
         this.isBlackPerspective  = isBlackPerspective;
         this.aiDifficulty        = difficulty;
 
+        setupUI();
         loadPieceImages();
-        setPreferredSize(new Dimension(BOARD_SIZE, BOARD_SIZE));
 
-        // If we’re playing globally, set turn order based on “host”
         if (playWithGlobalFriend && globalNetwork != null) {
             isMyTurn = globalNetwork.isHost();  
             if (!isMyTurn) {
-                // If not my turn, wait for opponent’s move
                 startListeningForMoves(globalNetwork);
             }
         }
 
-        addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                // If global friend mode and not my turn, ignore clicks
-                if (playWithGlobalFriend && !isMyTurn) {
-                    return;
+        addMouseListener(new EnhancedMouseHandler());
+        addMouseMotionListener(new MouseMotionHandler());
+        
+        updateSidePanel();
+    }
+    
+    private void setupUI() {
+        setBackground(Color.WHITE);
+        setDoubleBuffered(true);
+        setFocusable(true);
+    }
+    
+    private void startAnimationTimer() {
+        animationTimer = new javax.swing.Timer(16, e -> {
+            if (currentAnimation != null) {
+                currentAnimation.update();
+                if (currentAnimation.isComplete) {
+                    currentAnimation = null;
                 }
-                // Otherwise, handle the local click => either local friend or single-player
-                handleMousePress(e);
+                repaint();
             }
         });
+        animationTimer.start();
     }
 
-    /**
-     * Handle the mouse press for either local or single-player modes.
-     * (Global mode is the same, except we also send moves.)
-     */
-    private void handleMousePress(MouseEvent e) {
-        // Convert screen coords to board coords
-        int row = e.getY() / TILE_SIZE;
-        int col = e.getX() / TILE_SIZE;
+    // -----------------------------------------------------------------
+    // 9) Enhanced Side Panel
+    // -----------------------------------------------------------------
+    private JPanel createSidePanel() {
+        sidePanel = new JPanel();
+        sidePanel.setLayout(new BoxLayout(sidePanel, BoxLayout.Y_AXIS));
+        sidePanel.setBackground(SIDEBAR_BG);
+        sidePanel.setPreferredSize(new Dimension(SIDEBAR_WIDTH, BOARD_SIZE));
+        sidePanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // If black perspective is on, invert row/col
-        if (isBlackPerspective) {
-            row = 7 - row;
-            col = 7 - col;
+        // Game title
+        JLabel titleLabel = createStyledLabel("CHESS MASTER", 24, TEXT_PRIMARY, true);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        sidePanel.add(titleLabel);
+        sidePanel.add(Box.createVerticalStrut(20));
+
+        // Game mode card
+        JPanel modeCard = createCard();
+        modeLabel = createStyledLabel("Local Friend", 14, TEXT_PRIMARY, false);
+        JLabel modeSubLabel = createStyledLabel("Game Mode", 12, TEXT_SECONDARY, false);
+        modeCard.add(modeSubLabel);
+        modeCard.add(modeLabel);
+        sidePanel.add(modeCard);
+        sidePanel.add(Box.createVerticalStrut(15));
+
+        // Turn indicator card
+        JPanel turnCard = createCard();
+        turnLabel = createStyledLabel("White's Turn", 16, ACCENT_COLOR, true);
+        JLabel turnSubLabel = createStyledLabel("Current Player", 12, TEXT_SECONDARY, false);
+        turnCard.add(turnSubLabel);
+        turnCard.add(turnLabel);
+        sidePanel.add(turnCard);
+        sidePanel.add(Box.createVerticalStrut(15));
+
+        // Game status card
+        JPanel statusCard = createCard();
+        statusLabel = createStyledLabel("Game in Progress", 14, TEXT_PRIMARY, false);
+        JLabel statusSubLabel = createStyledLabel("Status", 12, TEXT_SECONDARY, false);
+        statusCard.add(statusSubLabel);
+        statusCard.add(statusLabel);
+        sidePanel.add(statusCard);
+        sidePanel.add(Box.createVerticalStrut(20));
+
+        // Move history
+        JLabel historyLabel = createStyledLabel("Move History", 16, TEXT_PRIMARY, true);
+        historyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sidePanel.add(historyLabel);
+        sidePanel.add(Box.createVerticalStrut(10));
+        
+        moveHistoryArea = new JTextArea(12, 0);
+        moveHistoryArea.setBackground(CARD_BG);
+        moveHistoryArea.setForeground(TEXT_PRIMARY);
+        moveHistoryArea.setFont(new Font("Consolas", Font.PLAIN, 12));
+        moveHistoryArea.setEditable(false);
+        moveHistoryArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JScrollPane historyScroll = new JScrollPane(moveHistoryArea);
+        historyScroll.setBackground(CARD_BG);
+        historyScroll.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        historyScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        sidePanel.add(historyScroll);
+
+        return sidePanel;
+    }
+    
+    private JPanel createCard() {
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR),
+            BorderFactory.createEmptyBorder(12, 15, 12, 15)
+        ));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, card.getPreferredSize().height));
+        return card;
+    }
+    
+    private JLabel createStyledLabel(String text, int fontSize, Color color, boolean bold) {
+        JLabel label = new JLabel(text);
+        label.setForeground(color);
+        label.setFont(new Font("Segoe UI", bold ? Font.BOLD : Font.PLAIN, fontSize));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+    
+    private void updateSidePanel() {
+        if (turnLabel != null) {
+            String currentPlayer = game.toMove.equals("white") ? "White" : "Black";
+            turnLabel.setText(currentPlayer + "'s Turn");
+            turnLabel.setForeground(game.toMove.equals("white") ? Color.WHITE : Color.GRAY);
         }
+        
+        if (modeLabel != null) {
+            String mode = playWithComputer ? "vs Computer" : 
+                         playWithLocalFriend ? "Local Friend" : "Global Friend";
+            modeLabel.setText(mode);
+        }
+        
+        if (statusLabel != null) {
+            String status = game.isGameOver();
+            if (status != null) {
+                if (status.equals("checkmate")) {
+                    statusLabel.setText("Checkmate!");
+                    statusLabel.setForeground(new Color(220, 20, 60));
+                } else {
+                    statusLabel.setText("Stalemate");
+                    statusLabel.setForeground(Color.ORANGE);
+                }
+            } else if (game.isInCheck(game.toMove)) {
+                statusLabel.setText("Check!");
+                statusLabel.setForeground(new Color(255, 165, 0));
+            } else {
+                statusLabel.setText("Game in Progress");
+                statusLabel.setForeground(TEXT_PRIMARY);
+            }
+        }
+    }
 
+    // -----------------------------------------------------------------
+    // 10) Enhanced Mouse Handling
+    // -----------------------------------------------------------------
+    private class EnhancedMouseHandler extends MouseAdapter {
+        @Override
+        public void mousePressed(MouseEvent e) {
+            if (playWithGlobalFriend && !isMyTurn) {
+                return;
+            }
+            
+            Point square = pixelToSquare(e.getX(), e.getY());
+            if (square != null) {
+                handleSquareClick(square);
+            }
+        }
+        
+        @Override
+        public void mouseExited(MouseEvent e) {
+            hoverSquare = null;
+            repaint();
+        }
+    }
+    
+    private class MouseMotionHandler extends MouseMotionAdapter {
+        @Override
+        public void mouseMoved(MouseEvent e) {
+            Point newHover = pixelToSquare(e.getX(), e.getY());
+            if (!Objects.equals(hoverSquare, newHover)) {
+                hoverSquare = newHover;
+                repaint();
+            }
+        }
+    }
+    
+    private Point pixelToSquare(int x, int y) {
+        int col = x / TILE_SIZE;
+        int row = y / TILE_SIZE;
+        if (col >= 0 && col < 8 && row >= 0 && row < 8) {
+            if (isBlackPerspective) {
+                row = 7 - row;
+                col = 7 - col;
+            }
+            return new Point(row, col);
+        }
+        return null;
+    }
+    
+    private void handleSquareClick(Point square) {
+        int row = square.x;
+        int col = square.y;
+        
         if (selectedSquare == null) {
-            // Select a piece
             Piece piece = game.board[row][col];
             if (piece != null && piece.color.equals(game.toMove)) {
                 selectedSquare = new int[]{row, col};
                 legalMoves = game.getLegalMovesForPiece(row, col);
-            } else {
-                selectedSquare = null;
-                legalMoves = new ArrayList<>();
+                repaint();
             }
         } else {
-            // Attempt a move
-            boolean found = false;
+            boolean foundMove = false;
             for (int[] mv : legalMoves) {
                 if (mv[0] == row && mv[1] == col) {
-                    found = true;
+                    foundMove = true;
                     break;
                 }
             }
-            if (found) {
-                int fx = selectedSquare[0], fy = selectedSquare[1];
-                game.makeMove(fx, fy, row, col);
-
-                // If global friend mode, send move to opponent
-                if (playWithGlobalFriend && globalNetwork != null) {
-                    try {
-                        globalNetwork.sendMove(fx, fy, row, col);
-                        isMyTurn = false;
-                        startListeningForMoves(globalNetwork);
-                    } catch (IOException ex) {
-                        JOptionPane.showMessageDialog(null,
-                                "Failed to send move: " + ex.getMessage(),
-                                "Network Error",
-                                JOptionPane.ERROR_MESSAGE);
-                    }
-                }
-
-                selectedSquare = null;
-                legalMoves = new ArrayList<>();
-                checkGameOverState();
+            
+            if (foundMove) {
+                executeMove(selectedSquare[0], selectedSquare[1], row, col);
             } else {
-                // Maybe select another piece or deselect
+                // Try to select a different piece
                 Piece piece = game.board[row][col];
                 if (piece != null && piece.color.equals(game.toMove)) {
                     selectedSquare = new int[]{row, col};
@@ -322,14 +538,280 @@ public class ChessMain extends JPanel {
                     legalMoves = new ArrayList<>();
                 }
             }
+            repaint();
         }
-        repaint();
+    }
+    
+    private void executeMove(int fromX, int fromY, int toX, int toY) {
+        // Record move for history
+        String moveNotation = generateMoveNotation(fromX, fromY, toX, toY);
+        
+        // Start animation
+        Piece movingPiece = game.board[fromX][fromY];
+        if (movingPiece != null) {
+            currentAnimation = new PieceAnimation(
+                new Point(fromX, fromY), 
+                new Point(toX, toY), 
+                movingPiece, 
+                isBlackPerspective
+            );
+        }
+        
+        // Execute the move
+        game.makeMove(fromX, fromY, toX, toY);
+        
+        // Add to move history
+        moveHistory.add(moveNotation);
+        updateMoveHistory();
+        
+        // Handle networking
+        if (playWithGlobalFriend && globalNetwork != null) {
+            try {
+                globalNetwork.sendMove(fromX, fromY, toX, toY);
+                isMyTurn = false;
+                startListeningForMoves(globalNetwork);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(null,
+                        "Failed to send move: " + ex.getMessage(),
+                        "Network Error",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        }
+
+        selectedSquare = null;
+        legalMoves = new ArrayList<>();
+        lastMoveTime = System.currentTimeMillis();
+        checkGameOverState();
+        updateSidePanel();
+    }
+    
+    private String generateMoveNotation(int fromX, int fromY, int toX, int toY) {
+        Piece piece = game.board[fromX][fromY];
+        if (piece == null) return "";
+        
+        String from = "" + (char)('a' + fromY) + (8 - fromX);
+        String to = "" + (char)('a' + toY) + (8 - toX);
+        
+        return piece.symbol().toUpperCase() + from + "-" + to;
+    }
+    
+    private void updateMoveHistory() {
+        if (moveHistoryArea != null) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < moveHistory.size(); i++) {
+                if (i % 2 == 0) {
+                    sb.append(String.format("%d. ", (i / 2) + 1));
+                }
+                sb.append(moveHistory.get(i));
+                if (i % 2 == 0) {
+                    sb.append(" ");
+                } else {
+                    sb.append("\n");
+                }
+            }
+            moveHistoryArea.setText(sb.toString());
+            moveHistoryArea.setCaretPosition(moveHistoryArea.getDocument().getLength());
+        }
     }
 
-    /**
-     * Checks if the game is over (checkmate/stalemate).
-     * Also, if playing with the computer, could trigger AI move here.
-     */
+    // -----------------------------------------------------------------
+    // 11) Enhanced Painting with Modern Graphics
+    // -----------------------------------------------------------------
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Graphics2D g2d = (Graphics2D) g.create();
+        
+        // Enable anti-aliasing for smooth graphics
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+        drawBoard(g2d);
+        drawCoordinates(g2d);
+        drawPieces(g2d);
+        drawHighlights(g2d);
+        drawBoardBorder(g2d);
+        
+        g2d.dispose();
+    }
+    
+    private void drawBoard(Graphics2D g2d) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                int drawRow = isBlackPerspective ? 7 - i : i;
+                int drawCol = isBlackPerspective ? 7 - j : j;
+                
+                // Base square color
+                Color baseColor = ((i + j) % 2 == 0) ? LIGHT_SQ_COLOR : DARK_SQ_COLOR;
+                
+                // Create gradient for depth
+                GradientPaint gradient = new GradientPaint(
+                    drawCol * TILE_SIZE, drawRow * TILE_SIZE, baseColor.brighter(),
+                    drawCol * TILE_SIZE + TILE_SIZE, drawRow * TILE_SIZE + TILE_SIZE, baseColor.darker()
+                );
+                g2d.setPaint(gradient);
+                g2d.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                
+                // Add subtle inner shadow for depth
+                g2d.setColor(new Color(0, 0, 0, 20));
+                g2d.drawRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1);
+            }
+        }
+    }
+    
+    private void drawCoordinates(Graphics2D g2d) {
+        g2d.setColor(new Color(100, 100, 100, 150));
+        g2d.setFont(new Font("Arial", Font.BOLD, 12));
+        FontMetrics fm = g2d.getFontMetrics();
+        
+        for (int i = 0; i < 8; i++) {
+            // Files (a-h)
+            char file = isBlackPerspective ? (char)('h' - i) : (char)('a' + i);
+            String fileStr = String.valueOf(file);
+            int x = i * TILE_SIZE + TILE_SIZE/2 - fm.stringWidth(fileStr)/2;
+            g2d.drawString(fileStr, x, BOARD_SIZE - 5);
+            
+            // Ranks (1-8)
+            int rank = isBlackPerspective ? i + 1 : 8 - i;
+            String rankStr = String.valueOf(rank);
+            g2d.drawString(rankStr, 5, i * TILE_SIZE + TILE_SIZE/2 + fm.getAscent()/2);
+        }
+    }
+    
+    private void drawHighlights(Graphics2D g2d) {
+        // Hover effect
+        if (hoverSquare != null) {
+            int drawRow = isBlackPerspective ? 7 - hoverSquare.x : hoverSquare.x;
+            int drawCol = isBlackPerspective ? 7 - hoverSquare.y : hoverSquare.y;
+            g2d.setColor(HOVER_COLOR);
+            g2d.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+        
+        // Selected square
+        if (selectedSquare != null) {
+            int drawRow = isBlackPerspective ? 7 - selectedSquare[0] : selectedSquare[0];
+            int drawCol = isBlackPerspective ? 7 - selectedSquare[1] : selectedSquare[1];
+            
+            g2d.setColor(SELECTED_COLOR);
+            g2d.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            
+            // Animated border for selected square
+            g2d.setStroke(new BasicStroke(3.0f));
+            g2d.setColor(new Color(70, 130, 180, 200));
+            g2d.drawRect(drawCol * TILE_SIZE + 1, drawRow * TILE_SIZE + 1, TILE_SIZE - 3, TILE_SIZE - 3);
+        }
+        
+        // Legal moves with smooth circles
+        if (!legalMoves.isEmpty()) {
+            for (int[] mv : legalMoves) {
+                int drawRow = isBlackPerspective ? 7 - mv[0] : mv[0];
+                int drawCol = isBlackPerspective ? 7 - mv[1] : mv[1];
+                
+                int centerX = drawCol * TILE_SIZE + TILE_SIZE/2;
+                int centerY = drawRow * TILE_SIZE + TILE_SIZE/2;
+                
+                // Larger circle for captures
+                boolean isCapture = game.board[mv[0]][mv[1]] != null;
+                int radius = isCapture ? 25 : 15;
+                
+                g2d.setColor(LEGAL_MOVE_COLOR);
+                g2d.fillOval(centerX - radius, centerY - radius, radius * 2, radius * 2);
+                
+                // Subtle glow effect
+                g2d.setColor(new Color(50, 205, 50, 60));
+                g2d.fillOval(centerX - radius - 3, centerY - radius - 3, (radius + 3) * 2, (radius + 3) * 2);
+            }
+        }
+        
+        // King in check highlight
+        if (game.isInCheck(game.toMove)) {
+            Point kingPos = findKing(game.toMove);
+            if (kingPos != null) {
+                int drawRow = isBlackPerspective ? 7 - kingPos.x : kingPos.x;
+                int drawCol = isBlackPerspective ? 7 - kingPos.y : kingPos.y;
+                
+                // Pulsing red effect
+                long time = System.currentTimeMillis();
+                float alpha = 0.5f + 0.3f * (float) Math.sin(time * 0.01);
+                g2d.setColor(new Color(220, 20, 60, (int)(alpha * 255)));
+                g2d.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+    }
+    
+    private Point findKing(String color) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece p = game.board[i][j];
+                if (p != null && p instanceof King && p.color.equals(color)) {
+                    return new Point(i, j);
+                }
+            }
+        }
+        return null;
+    }
+    
+    private void drawPieces(Graphics2D g2d) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece piece = game.board[i][j];
+                if (piece != null) {
+                    // Skip piece being animated
+                    if (currentAnimation != null && 
+                        currentAnimation.fromSquare.x == i && currentAnimation.fromSquare.y == j) {
+                        continue;
+                    }
+                    
+                    String key = piece.color + "_" + piece.getClass().getSimpleName().toLowerCase();
+                    BufferedImage img = images.get(key);
+                    if (img != null) {
+                        int drawRow = isBlackPerspective ? 7 - i : i;
+                        int drawCol = isBlackPerspective ? 7 - j : j;
+                        
+                        // Add subtle shadow
+                        g2d.setColor(new Color(0, 0, 0, 30));
+                        g2d.fillOval(drawCol * TILE_SIZE + 12, drawRow * TILE_SIZE + 12, 
+                                   TILE_SIZE - 20, TILE_SIZE - 20);
+                        
+                        // Draw piece with smooth scaling
+                        g2d.drawImage(img, drawCol * TILE_SIZE + 5, drawRow * TILE_SIZE + 5, 
+                                    TILE_SIZE - 10, TILE_SIZE - 10, null);
+                    }
+                }
+            }
+        }
+        
+        // Draw animated piece
+        if (currentAnimation != null) {
+            String key = currentAnimation.piece.color + "_" + 
+                        currentAnimation.piece.getClass().getSimpleName().toLowerCase();
+            BufferedImage img = images.get(key);
+            if (img != null) {
+                // Add glow effect during animation
+                g2d.setColor(new Color(255, 255, 255, 100));
+                g2d.fillOval(currentAnimation.currentPixel.x - 5, currentAnimation.currentPixel.y - 5,
+                           TILE_SIZE, TILE_SIZE);
+                
+                g2d.drawImage(img, currentAnimation.currentPixel.x, currentAnimation.currentPixel.y, 
+                            TILE_SIZE - 10, TILE_SIZE - 10, null);
+            }
+        }
+    }
+    
+    private void drawBoardBorder(Graphics2D g2d) {
+        g2d.setStroke(new BasicStroke(2.0f));
+        g2d.setColor(new Color(100, 100, 100));
+        g2d.drawRect(0, 0, BOARD_SIZE - 1, BOARD_SIZE - 1);
+        
+        // Outer glow
+        g2d.setColor(new Color(200, 200, 200, 50));
+        g2d.drawRect(-1, -1, BOARD_SIZE + 1, BOARD_SIZE + 1);
+    }
+
+    // -----------------------------------------------------------------
+    // 12) Rest of the methods (game logic, AI, networking) - keeping existing logic
+    // -----------------------------------------------------------------
     private void checkGameOverState() {
         String state = game.isGameOver();
         if (state != null) {
@@ -347,7 +829,6 @@ public class ChessMain extends JPanel {
         }
     }
 
-    /** Perform the computer's move based on the selected difficulty. */
     private void performComputerMove() {
         int[][] move;
         if (aiDifficulty == 0) {
@@ -372,7 +853,6 @@ public class ChessMain extends JPanel {
         return moves.get(new java.util.Random().nextInt(moves.size()));
     }
 
-    /** Compute the best move for black using minimax search. */
     private int[][] computeBestMove(int depth) {
         java.util.List<int[][]> moves = game.getAllLegalMoves("black");
         int bestScore = Integer.MIN_VALUE;
@@ -447,9 +927,6 @@ public class ChessMain extends JPanel {
         return 0;
     }
 
-    /**
-     * If we’re the client in global mode, we wait for the host to send moves.
-     */
     private void startListeningForMoves(GlobalNetwork globalNetwork) {
         new Thread(() -> {
             try {
@@ -467,89 +944,13 @@ public class ChessMain extends JPanel {
                 JOptionPane.showMessageDialog(null, 
                         "Connection lost: " + e.getMessage(), 
                         "Error", 
-                        JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.ERROR_MESSAGE
+                );
                 System.exit(0);
             }
         }).start();
     }
 
-    // -----------------------------------------------------------------
-    // 6) Drawing code
-    // -----------------------------------------------------------------
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-
-        // Draw board squares
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                // For drawing, figure out the "visual" row/col if black perspective
-                int drawRow = isBlackPerspective ? 7 - i : i;
-                int drawCol = isBlackPerspective ? 7 - j : j;
-                Color color = ((i + j) % 2 == 0) ? LIGHT_SQ_COLOR : DARK_SQ_COLOR;
-                g.setColor(color);
-                g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        }
-
-        // Highlight king in check
-        if (game.isInCheck(game.toMove)) {
-            int[] kingPos = null;
-            outer: for (int i = 0; i < 8; i++) {
-                for (int j = 0; j < 8; j++) {
-                    Piece p = game.board[i][j];
-                    if (p != null && p instanceof King && p.color.equals(game.toMove)) {
-                        kingPos = new int[]{ i, j };
-                        break outer;
-                    }
-                }
-            }
-            if (kingPos != null) {
-                int drawRow = isBlackPerspective ? 7 - kingPos[0] : kingPos[0];
-                int drawCol = isBlackPerspective ? 7 - kingPos[1] : kingPos[1];
-                g.setColor(CHECK_COLOR);
-                g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        }
-
-        // Highlight legal moves (if any)
-        if (selectedSquare != null && !legalMoves.isEmpty()) {
-            g.setColor(HIGHLIGHT_COLOR);
-            for (int[] mv : legalMoves) {
-                int drawRow = isBlackPerspective ? 7 - mv[0] : mv[0];
-                int drawCol = isBlackPerspective ? 7 - mv[1] : mv[1];
-                g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        }
-
-        // Draw pieces
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                Piece piece = game.board[i][j];
-                if (piece != null) {
-                    String key = piece.color + "_" + piece.getClass().getSimpleName().toLowerCase();
-                    BufferedImage img = images.get(key);
-                    if (img != null) {
-                        int drawRow = isBlackPerspective ? 7 - i : i;
-                        int drawCol = isBlackPerspective ? 7 - j : j;
-                        g.drawImage(img, drawCol * TILE_SIZE + 5, drawRow * TILE_SIZE + 5, null);
-                    }
-                }
-            }
-        }
-
-        // Highlight selected piece
-        if (selectedSquare != null) {
-            int drawRow = isBlackPerspective ? 7 - selectedSquare[0] : selectedSquare[0];
-            int drawCol = isBlackPerspective ? 7 - selectedSquare[1] : selectedSquare[1];
-            g.setColor(new Color(0, 255, 0, 100));
-            g.fillRect(drawCol * TILE_SIZE, drawRow * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        }
-    }
-
-    // -----------------------------------------------------------------
-    // 7) Load piece images from "images/???.png"
-    // -----------------------------------------------------------------
     void loadPieceImages() {
         String[] names = {"pawn","rook","knight","bishop","queen","king"};
         String[] colors = {"white","black"};
@@ -571,9 +972,6 @@ public class ChessMain extends JPanel {
         }
     }
 
-    // -----------------------------------------------------------------
-    // 8) Piece definitions (Pawn, Rook, Knight, etc.)
-    // -----------------------------------------------------------------
     abstract static class Piece {
         String color;
         boolean hasMoved = false;
@@ -742,9 +1140,6 @@ public class ChessMain extends JPanel {
         }
     }
 
-    // -----------------------------------------------------------------
-    // 9) ChessGame class, as in original
-    // -----------------------------------------------------------------
     static class ChessGame {
         Piece[][] board;
         String toMove = "white";
