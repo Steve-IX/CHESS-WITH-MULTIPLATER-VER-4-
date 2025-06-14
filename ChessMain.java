@@ -1255,8 +1255,8 @@ public class ChessMain extends JPanel {
                 }
             }
 
-            // Castling
-            if(piece instanceof King && !piece.hasMoved){
+            // Castling (only when not skipping check validation)
+            if(!skipCheck && piece instanceof King && !piece.hasMoved){
                 if(piece.color.equals("white") && x==7 && y==4){
                     // King side
                     if(board[7][7] instanceof Rook && !board[7][7].hasMoved){
