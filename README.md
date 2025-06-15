@@ -1,4 +1,4 @@
-# Chess With Multiplayer Ver 3
+# Chess With Multiplayer Ver 4
 
 This project is a Java Swing based chess application that supports multiple play modes. You can host or connect to a friend over the network, play locally on the same machine, or select the upcoming computer opponent mode.
 
