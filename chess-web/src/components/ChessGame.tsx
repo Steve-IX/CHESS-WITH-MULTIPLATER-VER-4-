@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty } from '@/lib/types';
-import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck } from '@/lib/chess';
+import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '@/lib/chess';
 import { chessAI } from '@/lib/ai';
 import { chessSocket } from '@/lib/socket';
 
