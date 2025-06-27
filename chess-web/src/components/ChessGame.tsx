@@ -291,7 +291,7 @@ export function ChessGame({
           </div>
 
           <div className="relative">
-            <div className={`grid grid-cols-8 gap-0 border-4 ${theme.boardBorder} rounded-xl overflow-hidden shadow-2xl ring-2 ${theme.boardRing}`}>
+            <div className={`grid grid-cols-8 gap-0 border-4 ${theme.boardBorder} rounded-xl overflow-hidden shadow-2xl ${theme.boardRing}`}>
               {Array.from({ length: 64 }, (_, i) => {
                 const x = Math.floor(i / 8);
                 const y = i % 8;
