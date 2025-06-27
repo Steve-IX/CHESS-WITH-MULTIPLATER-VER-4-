@@ -2,6 +2,7 @@ export type PieceType = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king'
 export type PlayerColor = 'white' | 'black';
 export type GameMode = 'local' | 'computer' | 'online';
 export type Difficulty = 'easy' | 'medium' | 'hard';
+export type ThemeId = 'classic' | 'mahogany' | 'emerald' | 'midnight';
 
 export interface Position {
   x: number;
@@ -46,6 +47,7 @@ export interface ChessGameProps {
   playerColor?: PlayerColor;
   isSpectator?: boolean;
   difficulty?: Difficulty;
+  themeId?: ThemeId;
   onMove?: (move: Move) => void;
   onGameOver?: (result: GameResult) => void;
 }

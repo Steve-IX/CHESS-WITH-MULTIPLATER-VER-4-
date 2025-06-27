@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { GameMode, Difficulty } from '@/lib/types';
+import { GameMode, Difficulty, ThemeId } from '@/lib/types';
 
 interface GameMenuProps {
-  onGameStart: (mode: GameMode, difficulty?: Difficulty, roomId?: string) => void;
+  onGameStart: (mode: GameMode, difficulty?: Difficulty, roomId?: string, themeId?: ThemeId) => void;
+  onThemeSelect: () => void;
+  selectedTheme: ThemeId;
 }
 
-export function GameMenu({ onGameStart }: GameMenuProps) {
+export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenuProps) {
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [roomId, setRoomId] = useState('');
@@ -23,21 +25,21 @@ export function GameMenu({ onGameStart }: GameMenuProps) {
     } else if (mode === 'online') {
       setShowRoomInput(true);
     } else {
-      onGameStart(mode);
+      onGameStart(mode, undefined, undefined, selectedTheme);
     }
   };
 
   const handleDifficultySelect = (diff: Difficulty) => {
     setDifficulty(diff);
-    onGameStart('computer', diff);
+    onGameStart('computer', diff, undefined, selectedTheme);
   };
 
   const handleOnlineGame = (isHost: boolean) => {
     if (isHost) {
-      onGameStart('online');
+      onGameStart('online', undefined, undefined, selectedTheme);
     } else {
       if (roomId.trim()) {
-        onGameStart('online', undefined, roomId.trim());
+        onGameStart('online', undefined, roomId.trim(), selectedTheme);
       }
     }
   };
@@ -59,6 +61,16 @@ export function GameMenu({ onGameStart }: GameMenuProps) {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">♔ Chess Master ♛</h1>
           <p className="text-white/70">Choose your game mode</p>
+          
+          {/* Theme selector button */}
+          <motion.button
+            onClick={onThemeSelect}
+            className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-all duration-200 text-white/80 hover:text-white text-sm"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            🎨 Themes ({selectedTheme})
+          </motion.button>
         </div>
 
         {!selectedMode && (

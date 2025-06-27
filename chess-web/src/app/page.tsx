@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { ChessGame } from '@/components/ChessGame';
 import { GameMenu } from '@/components/GameMenu';
-import { GameMode, Difficulty, GameResult } from '@/lib/types';
+import { ThemeSelector } from '@/components/ThemeSelector';
+import { GameMode, Difficulty, GameResult, ThemeId } from '@/lib/types';
 import { chessSocket } from '@/lib/socket';
 
 export default function Home() {
@@ -11,12 +12,18 @@ export default function Home() {
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [roomId, setRoomId] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeId>('classic');
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
 
-  const handleGameStart = async (mode: GameMode, diff?: Difficulty, roomCode?: string) => {
+  const handleGameStart = async (mode: GameMode, diff?: Difficulty, roomCode?: string, themeId?: ThemeId) => {
     setCurrentMode(mode);
     
     if (diff) {
       setDifficulty(diff);
+    }
+
+    if (themeId) {
+      setSelectedTheme(themeId);
     }
 
     if (mode === 'online') {
@@ -60,14 +67,43 @@ export default function Home() {
     setGameStarted(false);
     setCurrentMode(null);
     setRoomId(null);
+    setShowThemeSelector(false);
     
     if (chessSocket) {
       chessSocket.disconnect();
     }
   };
 
+  const handleThemeSelect = () => {
+    setShowThemeSelector(true);
+  };
+
+  const handleThemeChange = (themeId: ThemeId) => {
+    setSelectedTheme(themeId);
+  };
+
+  const handleBackFromThemes = () => {
+    setShowThemeSelector(false);
+  };
+
+  if (showThemeSelector) {
+    return (
+      <ThemeSelector 
+        selectedTheme={selectedTheme}
+        onThemeSelect={handleThemeChange}
+        onBack={handleBackFromThemes}
+      />
+    );
+  }
+
   if (!gameStarted || !currentMode) {
-    return <GameMenu onGameStart={handleGameStart} />;
+    return (
+      <GameMenu 
+        onGameStart={handleGameStart}
+        onThemeSelect={handleThemeSelect}
+        selectedTheme={selectedTheme}
+      />
+    );
   }
 
   return (
@@ -82,6 +118,7 @@ export default function Home() {
       <ChessGame
         gameMode={currentMode}
         difficulty={difficulty}
+        themeId={selectedTheme}
         onGameOver={handleGameOver}
       />
     </div>

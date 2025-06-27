@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty } from '@/lib/types';
+import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId } from '@/lib/types';
 import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '@/lib/chess';
 import { chessAI } from '@/lib/ai';
 import { chessSocket } from '@/lib/socket';
+import { getThemeById } from '@/lib/themes';
 
 const PIECE_SYMBOLS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -13,35 +14,36 @@ const PIECE_SYMBOLS = {
 };
 
 // Enhanced piece styling component
-const ChessPiece = ({ piece, isHovered }: { piece: Piece; isHovered: boolean }) => (
-  <motion.div
-    className={`
-      text-5xl select-none z-10 font-bold relative
-      ${piece.color === 'white' 
-        ? 'text-gray-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]' 
-        : 'text-gray-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)]'
-      }
-      filter transition-all duration-200
-      ${isHovered ? 'brightness-110 scale-110' : ''}
-    `}
-    style={{
-      textShadow: piece.color === 'white' 
-        ? '2px 2px 0px #374151, -1px -1px 0px #374151, 1px -1px 0px #374151, -1px 1px 0px #374151'
-        : '2px 2px 0px #f9fafb, -1px -1px 0px #f9fafb, 1px -1px 0px #f9fafb, -1px 1px 0px #f9fafb'
-    }}
-    initial={{ scale: 0 }}
-    animate={{ scale: 1 }}
-    whileHover={{ scale: 1.15 }}
-    transition={{ type: 'spring', stiffness: 300 }}
-  >
-    {PIECE_SYMBOLS[piece.color][piece.type]}
-  </motion.div>
-);
+const ChessPiece = ({ piece, isHovered, themeId }: { piece: Piece; isHovered: boolean; themeId: ThemeId }) => {
+  const theme = getThemeById(themeId);
+  
+  return (
+    <motion.div
+      className={`
+        text-5xl select-none z-10 font-bold relative
+        ${piece.color === 'white' ? theme.whitePieceColor : theme.blackPieceColor}
+        ${piece.color === 'white' ? theme.whitePieceShadow : theme.blackPieceShadow}
+        filter transition-all duration-200
+        ${isHovered ? 'brightness-110 scale-110' : ''}
+      `}
+      style={{
+        textShadow: piece.color === 'white' ? theme.whitePieceTextShadow : theme.blackPieceTextShadow
+      }}
+      initial={{ scale: 0 }}
+      animate={{ scale: 1 }}
+      whileHover={{ scale: 1.15 }}
+      transition={{ type: 'spring', stiffness: 300 }}
+    >
+      {PIECE_SYMBOLS[piece.color][piece.type]}
+    </motion.div>
+  );
+};
 
 export function ChessGame({
   gameMode = 'local',
   difficulty = 'medium',
   playerColor = 'white',
+  themeId = 'classic',
   onGameOver,
 }: ChessGameProps) {
   const initialState: GameState = {
@@ -68,6 +70,9 @@ export function ChessGame({
   const [moveNotations, setMoveNotations] = useState<string[]>([]);
   const [isPanelMinimized, setIsPanelMinimized] = useState(false);
   const [isAIThinking, setIsAIThinking] = useState(false);
+  
+  // Get current theme
+  const theme = getThemeById(themeId);
 
   // Initialize multiplayer if needed
   useEffect(() => {
@@ -286,7 +291,7 @@ export function ChessGame({
           </div>
 
           <div className="relative">
-            <div className="grid grid-cols-8 gap-0 border-4 border-stone-800 rounded-xl overflow-hidden shadow-2xl ring-2 ring-stone-600/20">
+            <div className={`grid grid-cols-8 gap-0 border-4 ${theme.boardBorder} rounded-xl overflow-hidden shadow-2xl ring-2 ${theme.boardRing}`}>
               {Array.from({ length: 64 }, (_, i) => {
                 const x = Math.floor(i / 8);
                 const y = i % 8;
@@ -298,7 +303,7 @@ export function ChessGame({
                     key={`${x}-${y}`}
                     className={`
                       w-16 h-16 flex items-center justify-center cursor-pointer relative
-                      ${isLight ? 'bg-stone-100' : 'bg-stone-700'}
+                      ${isLight ? theme.lightSquare : theme.darkSquare}
                       ${isSquareHighlighted(x, y) ? 'ring-4 ring-blue-500 ring-inset' : ''}
                       ${isSquareLegalMove(x, y) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
                       ${isSquareInCheck(x, y) ? 'ring-4 ring-red-500 ring-inset' : ''}
@@ -322,18 +327,19 @@ export function ChessGame({
                     {piece && (
                       <ChessPiece 
                         piece={piece} 
-                        isHovered={hoveredSquare?.x === x && hoveredSquare?.y === y} 
+                        isHovered={hoveredSquare?.x === x && hoveredSquare?.y === y}
+                        themeId={themeId}
                       />
                     )}
                     
                     {/* Coordinate labels */}
                     {x === 7 && (
-                      <div className={`absolute bottom-1 right-1 text-xs font-bold ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
+                      <div className={`absolute bottom-1 right-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
                         {String.fromCharCode(97 + y)}
                       </div>
                     )}
                     {y === 0 && (
-                      <div className={`absolute top-1 left-1 text-xs font-bold ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
+                      <div className={`absolute top-1 left-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
                         {8 - x}
                       </div>
                     )}
