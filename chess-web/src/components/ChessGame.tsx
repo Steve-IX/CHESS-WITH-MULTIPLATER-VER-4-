@@ -32,7 +32,7 @@ const ChessPiece = ({ piece, isHovered, themeId }: { piece: Piece; isHovered: bo
       initial={{ scale: 0 }}
       animate={{ scale: 1 }}
       whileHover={{ scale: 1.15 }}
-      transition={{ type: 'spring', stiffness: 300 }}
+      transition={{ type: 'spring', stiffness: 800, damping: 20 }}
     >
       {PIECE_SYMBOLS[piece.color][piece.type]}
     </motion.div>
@@ -279,8 +279,23 @@ export function ChessGame({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-6">
-      <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start">
+    <div className={`min-h-screen p-6 ${
+      themeId === 'crystal' 
+        ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden' 
+        : 'bg-gradient-to-br from-slate-100 to-slate-200'
+    }`}>
+      {/* Crystal theme background effects */}
+      {themeId === 'crystal' && (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-blue-100/20 to-purple-100/10" />
+          <div className="absolute top-0 left-0 w-full h-full">
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-radial from-white/30 to-transparent rounded-full blur-3xl" />
+            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-radial from-blue-200/40 to-transparent rounded-full blur-3xl" />
+            <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-gradient-radial from-purple-200/30 to-transparent rounded-full blur-2xl" />
+          </div>
+        </>
+      )}
+      <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start relative z-10">
         {/* Game Board */}
         <div className="flex flex-col items-center lg:flex-shrink-0">
           <div className="mb-4 text-center">

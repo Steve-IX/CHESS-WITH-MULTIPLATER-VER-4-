@@ -84,6 +84,23 @@ export const chessThemes: ChessTheme[] = [
     blackPieceTextShadow: '2px 2px 0px #f8fafc, -1px -1px 0px #f8fafc, 1px -1px 0px #f8fafc, -1px 1px 0px #f8fafc',
     coordinateLight: 'text-slate-600',
     coordinateDark: 'text-slate-300'
+  },
+  {
+    id: 'crystal',
+    name: 'Crystal Glass',
+    description: 'Clear glass with optical refraction and professional elegance',
+    lightSquare: 'bg-white bg-opacity-20 backdrop-blur-sm border border-white border-opacity-30',
+    darkSquare: 'bg-gray-900 bg-opacity-20 backdrop-blur-sm border border-gray-400 border-opacity-20',
+    boardBorder: 'border-2 border-white border-opacity-40 shadow-2xl',
+    boardRing: 'ring-4 ring-white ring-opacity-30 shadow-lg',
+    whitePieceColor: 'text-white',
+    blackPieceColor: 'text-gray-800',
+    whitePieceShadow: 'drop-shadow-2xl filter brightness-110',
+    blackPieceShadow: 'drop-shadow-xl filter brightness-90',
+    whitePieceTextShadow: '0 0 10px rgba(255,255,255,0.8), 2px 2px 4px rgba(0,0,0,0.3), -1px -1px 2px rgba(255,255,255,0.5)',
+    blackPieceTextShadow: '0 0 8px rgba(0,0,0,0.6), 2px 2px 4px rgba(255,255,255,0.4), -1px -1px 2px rgba(0,0,0,0.8)',
+    coordinateLight: 'text-white text-opacity-80',
+    coordinateDark: 'text-gray-200'
   }
 ];
 
