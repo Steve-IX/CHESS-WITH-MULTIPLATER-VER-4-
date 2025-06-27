@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "chess-web/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "chess-web/$1"
+    }
+  ]
+} 
