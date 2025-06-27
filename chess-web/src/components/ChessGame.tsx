@@ -12,6 +12,32 @@ const PIECE_SYMBOLS = {
   black: { king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟' }
 };
 
+// Enhanced piece styling component
+const ChessPiece = ({ piece, isHovered }: { piece: Piece; isHovered: boolean }) => (
+  <motion.div
+    className={`
+      text-5xl select-none z-10 font-bold relative
+      ${piece.color === 'white' 
+        ? 'text-gray-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]' 
+        : 'text-gray-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)]'
+      }
+      filter transition-all duration-200
+      ${isHovered ? 'brightness-110 scale-110' : ''}
+    `}
+    style={{
+      textShadow: piece.color === 'white' 
+        ? '2px 2px 0px #374151, -1px -1px 0px #374151, 1px -1px 0px #374151, -1px 1px 0px #374151'
+        : '2px 2px 0px #f9fafb, -1px -1px 0px #f9fafb, 1px -1px 0px #f9fafb, -1px 1px 0px #f9fafb'
+    }}
+    initial={{ scale: 0 }}
+    animate={{ scale: 1 }}
+    whileHover={{ scale: 1.15 }}
+    transition={{ type: 'spring', stiffness: 300 }}
+  >
+    {PIECE_SYMBOLS[piece.color][piece.type]}
+  </motion.div>
+);
+
 export function ChessGame({
   gameMode = 'local',
   difficulty = 'medium',
@@ -260,7 +286,7 @@ export function ChessGame({
           </div>
 
           <div className="relative">
-            <div className="grid grid-cols-8 gap-0 border-4 border-slate-800 rounded-lg overflow-hidden shadow-2xl">
+            <div className="grid grid-cols-8 gap-0 border-4 border-stone-800 rounded-xl overflow-hidden shadow-2xl ring-2 ring-stone-600/20">
               {Array.from({ length: 64 }, (_, i) => {
                 const x = Math.floor(i / 8);
                 const y = i % 8;
@@ -272,46 +298,42 @@ export function ChessGame({
                     key={`${x}-${y}`}
                     className={`
                       w-16 h-16 flex items-center justify-center cursor-pointer relative
-                      ${isLight ? 'bg-amber-100' : 'bg-amber-800'}
+                      ${isLight ? 'bg-stone-100' : 'bg-stone-700'}
                       ${isSquareHighlighted(x, y) ? 'ring-4 ring-blue-500 ring-inset' : ''}
-                      ${isSquareLegalMove(x, y) ? 'ring-2 ring-green-500 ring-inset' : ''}
+                      ${isSquareLegalMove(x, y) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
                       ${isSquareInCheck(x, y) ? 'ring-4 ring-red-500 ring-inset' : ''}
                       hover:brightness-110 transition-all duration-200
+                      ${hoveredSquare?.x === x && hoveredSquare?.y === y ? 'bg-opacity-80' : ''}
                     `}
                     onClick={() => handleSquareClick({ x, y })}
                     onMouseEnter={() => setHoveredSquare({ x, y })}
                     onMouseLeave={() => setHoveredSquare(null)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                   >
                     {/* Legal move indicator */}
                     {isSquareLegalMove(x, y) && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className={`w-4 h-4 rounded-full ${piece ? 'ring-2 ring-green-500' : 'bg-green-500/50'}`} />
+                        <div className={`w-4 h-4 rounded-full ${piece ? 'ring-3 ring-emerald-400 ring-opacity-80' : 'bg-emerald-400/60'}`} />
                       </div>
                     )}
                     
                     {/* Chess piece */}
                     {piece && (
-                      <motion.div
-                        className="text-4xl select-none z-10"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        whileHover={{ scale: 1.1 }}
-                        transition={{ type: 'spring', stiffness: 300 }}
-                      >
-                        {PIECE_SYMBOLS[piece.color][piece.type]}
-                      </motion.div>
+                      <ChessPiece 
+                        piece={piece} 
+                        isHovered={hoveredSquare?.x === x && hoveredSquare?.y === y} 
+                      />
                     )}
                     
                     {/* Coordinate labels */}
                     {x === 7 && (
-                      <div className="absolute bottom-1 right-1 text-xs font-semibold text-slate-600">
+                      <div className={`absolute bottom-1 right-1 text-xs font-bold ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
                         {String.fromCharCode(97 + y)}
                       </div>
                     )}
                     {y === 0 && (
-                      <div className="absolute top-1 left-1 text-xs font-semibold text-slate-600">
+                      <div className={`absolute top-1 left-1 text-xs font-bold ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
                         {8 - x}
                       </div>
                     )}
@@ -386,21 +408,51 @@ export function ChessGame({
                   <div className="space-y-4">
                     <div>
                       <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by White</h4>
-                      <div className="flex flex-wrap gap-1 min-h-[2rem] bg-slate-50 rounded p-2">
+                      <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
                         {gameState.capturedPieces.white.map((piece, index) => (
-                          <span key={index} className="text-lg">
-                            {PIECE_SYMBOLS[piece.color][piece.type]}
-                          </span>
+                          <div key={index} className="relative">
+                            <span 
+                              className={`
+                                text-xl font-bold
+                                ${piece.color === 'white' 
+                                  ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
+                                  : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
+                                }
+                              `}
+                              style={{
+                                textShadow: piece.color === 'white' 
+                                  ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
+                                  : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
+                              }}
+                            >
+                              {PIECE_SYMBOLS[piece.color][piece.type]}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     </div>
                     <div>
                       <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by Black</h4>
-                      <div className="flex flex-wrap gap-1 min-h-[2rem] bg-slate-50 rounded p-2">
+                      <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
                         {gameState.capturedPieces.black.map((piece, index) => (
-                          <span key={index} className="text-lg">
-                            {PIECE_SYMBOLS[piece.color][piece.type]}
-                          </span>
+                          <div key={index} className="relative">
+                            <span 
+                              className={`
+                                text-xl font-bold
+                                ${piece.color === 'white' 
+                                  ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
+                                  : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
+                                }
+                              `}
+                              style={{
+                                textShadow: piece.color === 'white' 
+                                  ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
+                                  : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
+                              }}
+                            >
+                              {PIECE_SYMBOLS[piece.color][piece.type]}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     </div>
