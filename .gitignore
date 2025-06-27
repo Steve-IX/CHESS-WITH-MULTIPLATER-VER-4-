@@ -68,3 +68,4 @@ dependency-reduced-pom.xml
 # Application specific
 *.save
 *.backup 
+node_modules
