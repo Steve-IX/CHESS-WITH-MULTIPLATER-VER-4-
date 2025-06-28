@@ -150,6 +150,25 @@ export const MusicPlayer = () => {
   const { theme, colors } = useTheme();
   const currentTrack = playlist[currentTrackIndex];
 
+  // Dynamic text color based on theme
+  const getContrastTextColor = () => {
+    return theme === 'dark' ? 'text-white' : 'text-gray-900';
+  };
+
+  const getSecondaryTextColor = () => {
+    return theme === 'dark' ? 'text-white/70' : 'text-gray-700';
+  };
+
+  const getMutedTextColor = () => {
+    return theme === 'dark' ? 'text-white/50' : 'text-gray-500';
+  };
+
+  const getPlayerBackgroundColor = () => {
+    return theme === 'dark' 
+      ? 'bg-black/20 backdrop-blur-xl border-white/30' 
+      : 'bg-white/90 backdrop-blur-xl border-gray-400/50';
+  };
+
   // Shuffle playlist on mount
   useEffect(() => {
     console.log('🎵 Shuffling music playlist for fresh listening experience...');
@@ -264,17 +283,35 @@ export const MusicPlayer = () => {
   };
 
   const startVisualizer = () => {
-    if (!analyzerRef.current || !canvasRef.current) return;
+    if (!analyzerRef.current || !canvasRef.current) {
+      console.log('Visualizer not ready, retrying...');
+      // Retry initialization if analyzer isn't ready
+      setTimeout(async () => {
+        const success = await initializeAudioContext();
+        if (success && isPlaying) {
+          startVisualizerAnimation();
+        }
+      }, 100);
+      return;
+    }
+    
+    startVisualizerAnimation();
+  };
+
+  const startVisualizerAnimation = () => {
+    // Stop any existing animation first
+    stopVisualizer();
     
     const animate = () => {
+      if (!analyzerRef.current || !canvasRef.current) {
+        stopVisualizer();
+        return;
+      }
+      
       drawVisualizer();
       animationFrameRef.current = requestAnimationFrame(animate);
     };
-
-    // Stop any existing animation
-    stopVisualizer();
     
-    // Start new animation
     animate();
   };
 
@@ -300,6 +337,9 @@ export const MusicPlayer = () => {
     const setupNewTrack = async () => {
       if (!audioRef.current) return;
 
+      // Always set the audio element's volume to the current state
+      audioRef.current.volume = isMuted ? 0 : volume;
+
       // Cancel any pending play attempts
       if (playAttemptRef.current) {
         playAttemptRef.current.abort();
@@ -309,11 +349,34 @@ export const MusicPlayer = () => {
 
       try {
         setIsChangingTrack(true);
-        // Reset connection state to force new setup
-        isConnectedRef.current = false;
         
-        // Stop current visualizer
-        stopVisualizer();
+        // Cleanup previous audio context and connections
+        if (sourceRef.current) {
+          try {
+            sourceRef.current.disconnect();
+          } catch (e) {
+            console.log('Cleaning up previous source...');
+          }
+        }
+        if (analyzerRef.current) {
+          try {
+            analyzerRef.current.disconnect();
+          } catch (e) {
+            console.log('Cleaning up previous analyzer...');
+          }
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+          try {
+            await audioContextRef.current.close();
+          } catch (e) {
+            console.log('Cleaning up previous audio context...');
+          }
+        }
+        
+        audioContextRef.current = null;
+        sourceRef.current = null;
+        analyzerRef.current = null;
+        isConnectedRef.current = false;
         
         // Reset audio element
         audioRef.current.currentTime = 0;
@@ -321,15 +384,19 @@ export const MusicPlayer = () => {
         if (isPlaying) {
           try {
             // Small delay to ensure proper cleanup between tracks
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 100));
             if (signal.aborted) return;
 
-            // This will trigger handlePlay which sets up the new context
+            // Initialize new audio context before playing
+            await initializeAudioContext();
+            
+            // This will trigger handlePlay which sets up the visualizer
             await audioRef.current.play();
           } catch (error: unknown) {
             if (error instanceof Error && error.name !== 'AbortError') {
               console.error('Error auto-playing new track:', error);
               setIsPlaying(false);
+              setError('Failed to play track');
             }
           }
         }
@@ -339,7 +406,6 @@ export const MusicPlayer = () => {
     };
 
     setupNewTrack();
-
     return () => {
       if (playAttemptRef.current) {
         playAttemptRef.current.abort();
@@ -347,39 +413,42 @@ export const MusicPlayer = () => {
     };
   }, [currentTrackIndex]);
 
+  const nextTrack = useCallback(() => {
+    if (isChangingTrack) return; // Prevent rapid track changes
+    stopVisualizer();
+    setCurrentTrackIndex((prevIndex) => {
+      const nextIndex = prevIndex + 1;
+      return nextIndex >= playlist.length ? 0 : nextIndex;
+    });
+  }, [isChangingTrack, playlist.length, stopVisualizer]);
+
+  const previousTrack = useCallback(() => {
+    if (isChangingTrack) return; // Prevent rapid track changes
+    stopVisualizer();
+    setCurrentTrackIndex((prevIndex) => {
+      const prevTrackIndex = prevIndex - 1;
+      return prevTrackIndex < 0 ? playlist.length - 1 : prevTrackIndex;
+    });
+  }, [isChangingTrack, playlist.length, stopVisualizer]);
+
   // Audio event handlers
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    let playbackTimeout: NodeJS.Timeout | undefined;
-    let visualizerTimeout: NodeJS.Timeout | undefined;
-
-    const handleLoadedMetadata = () => {
-      if (audioRef.current) {
-        setDuration(audioRef.current.duration);
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
-      }
-    };
-
     const handlePlay = async () => {
       try {
-        // Initialize audio context if not already done
+        setIsPlaying(true);
         const success = await initializeAudioContext();
         if (success) {
           startVisualizer();
-          setIsPlaying(true);
           setError(null);
         }
       } catch (error) {
         console.error('Error during play:', error);
         setError('Failed to start playback');
         setIsPlaying(false);
+        stopVisualizer();
       }
     };
 
@@ -392,16 +461,15 @@ export const MusicPlayer = () => {
       stopVisualizer();
       if (autoPlayEnabled) {
         nextTrack();
-        // Ensure isPlaying stays true for autoplay
-        setIsPlaying(true);
       } else {
         setIsPlaying(false);
       }
     };
 
-    const handleError = () => {
-      console.error('Audio playback error');
-      setError('Failed to load audio');
+    const handleError = (e: Event) => {
+      const mediaError = (e.target as HTMLAudioElement).error;
+      console.error('Audio playback error:', mediaError?.message);
+      setError(`Playback error: ${mediaError?.message || 'Unknown error'}`);
       setIsPlaying(false);
       stopVisualizer();
     };
@@ -415,15 +483,13 @@ export const MusicPlayer = () => {
         }
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error auto-playing new track:', error);
+          console.error('Error auto-playing track:', error);
           setIsPlaying(false);
+          setError('Failed to auto-play track');
         }
       }
     };
 
-    // Effect for handling audio element events
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
@@ -431,36 +497,13 @@ export const MusicPlayer = () => {
     audio.addEventListener('canplay', handleCanPlay);
 
     return () => {
-      if (playbackTimeout) clearTimeout(playbackTimeout);
-      if (visualizerTimeout) clearTimeout(visualizerTimeout);
-      
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('canplay', handleCanPlay);
     };
-  }, [isPlaying, autoPlayEnabled]);
-
-  const nextTrack = () => {
-    if (isChangingTrack) return; // Prevent rapid track changes
-    stopVisualizer();
-    setCurrentTrackIndex((prevIndex) => {
-      const nextIndex = prevIndex + 1;
-      return nextIndex >= playlist.length ? 0 : nextIndex;
-    });
-  };
-
-  const previousTrack = () => {
-    if (isChangingTrack) return; // Prevent rapid track changes
-    stopVisualizer();
-    setCurrentTrackIndex((prevIndex) => {
-      const prevTrackIndex = prevIndex - 1;
-      return prevTrackIndex < 0 ? playlist.length - 1 : prevTrackIndex;
-    });
-  };
+  }, [isPlaying, autoPlayEnabled, nextTrack, stopVisualizer, initializeAudioContext, startVisualizer]);
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current || !duration) return;
@@ -505,17 +548,67 @@ export const MusicPlayer = () => {
 
     try {
       if (!isPlaying) {
-        await initializeAudioContext();
-        await audioRef.current?.play();
+        // Initialize audio context and wait for it to be ready
+        const contextInitialized = await initializeAudioContext();
+        if (!contextInitialized) {
+          setError('Failed to initialize audio system');
+          return;
+        }
+
+        // Ensure we have a valid audio element
+        if (!audioRef.current) {
+          setError('Audio system not ready');
+          return;
+        }
+
+        try {
+          await audioRef.current.play();
+          setError(null); // Clear any previous errors
+          startVisualizer(); // Start visualizer after successful play
+        } catch (playError) {
+          console.error('Play error:', playError);
+          setError('Failed to start playback');
+          setIsPlaying(false);
+          stopVisualizer();
+        }
       } else {
         audioRef.current?.pause();
+        stopVisualizer();
       }
     } catch (error) {
       console.error('Error toggling playback:', error);
       setError('Failed to toggle playback');
       setIsPlaying(false);
+      stopVisualizer();
     }
   };
+
+  // Metadata and time update handlers
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      if (audioRef.current) {
+        setDuration(audioRef.current.duration);
+        audioRef.current.volume = isMuted ? 0 : volume;
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [volume, isMuted]);
 
   return (
     <>
@@ -551,7 +644,7 @@ export const MusicPlayer = () => {
           
           {/* Main player container with glassmorphism */}
           <motion.div
-            className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 overflow-hidden"
+            className={`${getPlayerBackgroundColor()} rounded-3xl shadow-2xl border border-white/30 overflow-hidden`}
             style={{
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
             }}
@@ -578,17 +671,21 @@ export const MusicPlayer = () => {
                         ♔
                       </motion.div>
                       <div>
-                        <div className="text-white font-semibold text-sm">
+                        <div className={`${getContrastTextColor()} font-semibold text-sm`}>
                           {error ? 'Error' : isPlaying ? 'Now Playing' : 'Paused'}
                         </div>
-                        <div className="text-white/60 text-xs">
+                        <div className={`${getSecondaryTextColor()} text-xs`}>
                           {currentTrackIndex + 1}/{playlist.length} • Music Player
                         </div>
                       </div>
                     </div>
                     <motion.button
                       onClick={() => setIsMinimized(true)}
-                      className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300 text-white/70 hover:text-white"
+                      className={`p-2 rounded-xl ${
+                        theme === 'dark' 
+                          ? 'hover:bg-white/10 text-white/70 hover:text-white' 
+                          : 'hover:bg-gray-200/60 text-gray-600 hover:text-gray-800'
+                      } transition-all duration-300`}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
                     >
@@ -636,13 +733,13 @@ export const MusicPlayer = () => {
                       </div>
                     </motion.div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-white font-semibold text-sm truncate">
+                      <div className={`${getContrastTextColor()} font-semibold text-sm truncate`}>
                         {currentTrack.title}
                       </div>
-                      <div className="text-white/70 text-xs truncate">
+                      <div className={`${getSecondaryTextColor()} text-xs truncate`}>
                         {currentTrack.artist}
                       </div>
-                      <div className="text-white/50 text-xs truncate">
+                      <div className={`${getMutedTextColor()} text-xs truncate`}>
                         {currentTrack.album}
                       </div>
                     </div>
@@ -694,8 +791,8 @@ export const MusicPlayer = () => {
                       />
                     </div>
                     <div className="flex justify-between text-xs mt-2">
-                      <span className="text-white/60">{formatTime(currentTime)}</span>
-                      <span className="text-white/60">{formatTime(duration)}</span>
+                      <span className={`${getSecondaryTextColor()}`}>{formatTime(currentTime)}</span>
+                      <span className={`${getSecondaryTextColor()}`}>{formatTime(duration)}</span>
                     </div>
                   </div>
 
@@ -704,7 +801,11 @@ export const MusicPlayer = () => {
                     <div className="flex items-center gap-2">
                       <motion.button
                         onClick={previousTrack}
-                        className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300 text-white/70 hover:text-white"
+                        className={`p-2 rounded-xl transition-all duration-300 ${
+                          theme === 'dark' 
+                            ? 'hover:bg-white/10 text-white/70 hover:text-white' 
+                            : 'hover:bg-gray-200/60 text-gray-600 hover:text-gray-800'
+                        }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         disabled={playlist.length <= 1}
@@ -731,7 +832,11 @@ export const MusicPlayer = () => {
 
                       <motion.button
                         onClick={nextTrack}
-                        className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300 text-white/70 hover:text-white"
+                        className={`p-2 rounded-xl transition-all duration-300 ${
+                          theme === 'dark' 
+                            ? 'hover:bg-white/10 text-white/70 hover:text-white' 
+                            : 'hover:bg-gray-200/60 text-gray-600 hover:text-gray-800'
+                        }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         disabled={playlist.length <= 1}
