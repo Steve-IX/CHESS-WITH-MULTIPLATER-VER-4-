@@ -283,35 +283,17 @@ export const MusicPlayer = () => {
   };
 
   const startVisualizer = () => {
-    if (!analyzerRef.current || !canvasRef.current) {
-      console.log('Visualizer not ready, retrying...');
-      // Retry initialization if analyzer isn't ready
-      setTimeout(async () => {
-        const success = await initializeAudioContext();
-        if (success && isPlaying) {
-          startVisualizerAnimation();
-        }
-      }, 100);
-      return;
-    }
-    
-    startVisualizerAnimation();
-  };
-
-  const startVisualizerAnimation = () => {
-    // Stop any existing animation first
-    stopVisualizer();
+    if (!analyzerRef.current || !canvasRef.current) return;
     
     const animate = () => {
-      if (!analyzerRef.current || !canvasRef.current) {
-        stopVisualizer();
-        return;
-      }
-      
       drawVisualizer();
       animationFrameRef.current = requestAnimationFrame(animate);
     };
+
+    // Stop any existing animation
+    stopVisualizer();
     
+    // Start new animation
     animate();
   };
 
@@ -338,7 +320,7 @@ export const MusicPlayer = () => {
       if (!audioRef.current) return;
 
       // Always set the audio element's volume to the current state
-      audioRef.current.volume = isMuted ? 0 : volume;
+      audioRef.current.volume = volume;
 
       // Cancel any pending play attempts
       if (playAttemptRef.current) {
@@ -349,34 +331,11 @@ export const MusicPlayer = () => {
 
       try {
         setIsChangingTrack(true);
-        
-        // Cleanup previous audio context and connections
-        if (sourceRef.current) {
-          try {
-            sourceRef.current.disconnect();
-          } catch (e) {
-            console.log('Cleaning up previous source...');
-          }
-        }
-        if (analyzerRef.current) {
-          try {
-            analyzerRef.current.disconnect();
-          } catch (e) {
-            console.log('Cleaning up previous analyzer...');
-          }
-        }
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          try {
-            await audioContextRef.current.close();
-          } catch (e) {
-            console.log('Cleaning up previous audio context...');
-          }
-        }
-        
-        audioContextRef.current = null;
-        sourceRef.current = null;
-        analyzerRef.current = null;
+        // Reset connection state to force new setup
         isConnectedRef.current = false;
+        
+        // Stop current visualizer
+        stopVisualizer();
         
         // Reset audio element
         audioRef.current.currentTime = 0;
@@ -384,19 +343,15 @@ export const MusicPlayer = () => {
         if (isPlaying) {
           try {
             // Small delay to ensure proper cleanup between tracks
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 50));
             if (signal.aborted) return;
 
-            // Initialize new audio context before playing
-            await initializeAudioContext();
-            
-            // This will trigger handlePlay which sets up the visualizer
+            // This will trigger handlePlay which sets up the new context
             await audioRef.current.play();
           } catch (error: unknown) {
             if (error instanceof Error && error.name !== 'AbortError') {
               console.error('Error auto-playing new track:', error);
               setIsPlaying(false);
-              setError('Failed to play track');
             }
           }
         }
@@ -406,6 +361,7 @@ export const MusicPlayer = () => {
     };
 
     setupNewTrack();
+
     return () => {
       if (playAttemptRef.current) {
         playAttemptRef.current.abort();
@@ -413,42 +369,41 @@ export const MusicPlayer = () => {
     };
   }, [currentTrackIndex]);
 
-  const nextTrack = useCallback(() => {
-    if (isChangingTrack) return; // Prevent rapid track changes
-    stopVisualizer();
-    setCurrentTrackIndex((prevIndex) => {
-      const nextIndex = prevIndex + 1;
-      return nextIndex >= playlist.length ? 0 : nextIndex;
-    });
-  }, [isChangingTrack, playlist.length, stopVisualizer]);
-
-  const previousTrack = useCallback(() => {
-    if (isChangingTrack) return; // Prevent rapid track changes
-    stopVisualizer();
-    setCurrentTrackIndex((prevIndex) => {
-      const prevTrackIndex = prevIndex - 1;
-      return prevTrackIndex < 0 ? playlist.length - 1 : prevTrackIndex;
-    });
-  }, [isChangingTrack, playlist.length, stopVisualizer]);
-
   // Audio event handlers
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    let playbackTimeout: NodeJS.Timeout | undefined;
+    let visualizerTimeout: NodeJS.Timeout | undefined;
+
+    const handleLoadedMetadata = () => {
+      if (audioRef.current) {
+        setDuration(audioRef.current.duration);
+        // Always set the audio element's volume to the current state
+        audioRef.current.volume = volume;
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+    };
+
     const handlePlay = async () => {
       try {
-        setIsPlaying(true);
+        // Initialize audio context if not already done
         const success = await initializeAudioContext();
         if (success) {
           startVisualizer();
+          setIsPlaying(true);
           setError(null);
         }
       } catch (error) {
         console.error('Error during play:', error);
         setError('Failed to start playback');
         setIsPlaying(false);
-        stopVisualizer();
       }
     };
 
@@ -461,15 +416,16 @@ export const MusicPlayer = () => {
       stopVisualizer();
       if (autoPlayEnabled) {
         nextTrack();
+        // Ensure isPlaying stays true for autoplay
+        setIsPlaying(true);
       } else {
         setIsPlaying(false);
       }
     };
 
-    const handleError = (e: Event) => {
-      const mediaError = (e.target as HTMLAudioElement).error;
-      console.error('Audio playback error:', mediaError?.message);
-      setError(`Playback error: ${mediaError?.message || 'Unknown error'}`);
+    const handleError = () => {
+      console.error('Audio playback error');
+      setError('Failed to load audio');
       setIsPlaying(false);
       stopVisualizer();
     };
@@ -483,13 +439,15 @@ export const MusicPlayer = () => {
         }
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error auto-playing track:', error);
+          console.error('Error auto-playing new track:', error);
           setIsPlaying(false);
-          setError('Failed to auto-play track');
         }
       }
     };
 
+    // Effect for handling audio element events
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
@@ -497,13 +455,36 @@ export const MusicPlayer = () => {
     audio.addEventListener('canplay', handleCanPlay);
 
     return () => {
+      if (playbackTimeout) clearTimeout(playbackTimeout);
+      if (visualizerTimeout) clearTimeout(visualizerTimeout);
+      
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('canplay', handleCanPlay);
     };
-  }, [isPlaying, autoPlayEnabled, nextTrack, stopVisualizer, initializeAudioContext, startVisualizer]);
+  }, [isPlaying, autoPlayEnabled]);
+
+  const nextTrack = () => {
+    if (isChangingTrack) return; // Prevent rapid track changes
+    stopVisualizer();
+    setCurrentTrackIndex((prevIndex) => {
+      const nextIndex = prevIndex + 1;
+      return nextIndex >= playlist.length ? 0 : nextIndex;
+    });
+  };
+
+  const previousTrack = () => {
+    if (isChangingTrack) return; // Prevent rapid track changes
+    stopVisualizer();
+    setCurrentTrackIndex((prevIndex) => {
+      const prevTrackIndex = prevIndex - 1;
+      return prevTrackIndex < 0 ? playlist.length - 1 : prevTrackIndex;
+    });
+  };
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current || !duration) return;
@@ -548,67 +529,17 @@ export const MusicPlayer = () => {
 
     try {
       if (!isPlaying) {
-        // Initialize audio context and wait for it to be ready
-        const contextInitialized = await initializeAudioContext();
-        if (!contextInitialized) {
-          setError('Failed to initialize audio system');
-          return;
-        }
-
-        // Ensure we have a valid audio element
-        if (!audioRef.current) {
-          setError('Audio system not ready');
-          return;
-        }
-
-        try {
-          await audioRef.current.play();
-          setError(null); // Clear any previous errors
-          startVisualizer(); // Start visualizer after successful play
-        } catch (playError) {
-          console.error('Play error:', playError);
-          setError('Failed to start playback');
-          setIsPlaying(false);
-          stopVisualizer();
-        }
+        await initializeAudioContext();
+        await audioRef.current?.play();
       } else {
         audioRef.current?.pause();
-        stopVisualizer();
       }
     } catch (error) {
       console.error('Error toggling playback:', error);
       setError('Failed to toggle playback');
       setIsPlaying(false);
-      stopVisualizer();
     }
   };
-
-  // Metadata and time update handlers
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const handleLoadedMetadata = () => {
-      if (audioRef.current) {
-        setDuration(audioRef.current.duration);
-        audioRef.current.volume = isMuted ? 0 : volume;
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
-      }
-    };
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-
-    return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-    };
-  }, [volume, isMuted]);
 
   return (
     <>

@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { GameMode, Difficulty, ThemeId } from '@/lib/types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { GameMode, Difficulty, ThemeId, TimerMode } from '@/lib/types';
 import { useTheme } from '@/lib/ThemeContext';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Clock } from 'lucide-react';
 
 interface GameMenuProps {
-  onGameStart: (mode: GameMode, difficulty?: Difficulty, roomId?: string, themeId?: ThemeId) => void;
+  onGameStart: (mode: GameMode, difficulty?: Difficulty, roomId?: string, themeId?: ThemeId, timerMode?: TimerMode, customTime?: number) => void;
   onThemeSelect: () => void;
   selectedTheme: ThemeId;
 }
@@ -18,31 +18,47 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
   const [roomId, setRoomId] = useState('');
   const [showDifficulty, setShowDifficulty] = useState(false);
   const [showRoomInput, setShowRoomInput] = useState(false);
+  const [showTimerSelect, setShowTimerSelect] = useState(false);
+  const [timerMode, setTimerMode] = useState<TimerMode>('none');
+  const [customTime, setCustomTime] = useState<number>(15);
   const { theme, toggleTheme } = useTheme();
 
   const handleModeSelect = (mode: GameMode) => {
     setSelectedMode(mode);
+    setShowTimerSelect(true);
+  };
+
+  const handleTimerSelect = (timer: TimerMode) => {
+    setTimerMode(timer);
     
-    if (mode === 'computer') {
+    if (selectedMode === 'computer') {
+      setShowTimerSelect(false);
       setShowDifficulty(true);
-    } else if (mode === 'online') {
+    } else if (selectedMode === 'online') {
+      setShowTimerSelect(false);
       setShowRoomInput(true);
     } else {
-      onGameStart(mode, undefined, undefined, selectedTheme);
+      // Local mode
+      const finalCustomTime = timer === 'custom' ? customTime : undefined;
+      if (selectedMode) {
+        onGameStart(selectedMode, undefined, undefined, selectedTheme, timer, finalCustomTime);
+      }
     }
   };
 
   const handleDifficultySelect = (diff: Difficulty) => {
     setDifficulty(diff);
-    onGameStart('computer', diff, undefined, selectedTheme);
+    const finalCustomTime = timerMode === 'custom' ? customTime : undefined;
+    onGameStart('computer', diff, undefined, selectedTheme, timerMode, finalCustomTime);
   };
 
   const handleOnlineGame = (isHost: boolean) => {
+    const finalCustomTime = timerMode === 'custom' ? customTime : undefined;
     if (isHost) {
-      onGameStart('online', undefined, undefined, selectedTheme);
+      onGameStart('online', undefined, undefined, selectedTheme, timerMode, finalCustomTime);
     } else {
       if (roomId.trim()) {
-        onGameStart('online', undefined, roomId.trim(), selectedTheme);
+        onGameStart('online', undefined, roomId.trim(), selectedTheme, timerMode, finalCustomTime);
       }
     }
   };
@@ -51,7 +67,9 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
     setSelectedMode(null);
     setShowDifficulty(false);
     setShowRoomInput(false);
+    setShowTimerSelect(false);
     setRoomId('');
+    setTimerMode('none');
   };
 
   return (
@@ -79,57 +97,21 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         </motion.div>
       </motion.button>
 
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-        {/* Floating Orbs */}
+      {/* Enhanced Animated Background */}
+      <div className={`absolute inset-0 transition-all duration-1000 ${
+        theme === 'dark' 
+          ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
+          : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
+      }`}>
+        {/* Enhanced Floating Chess Pieces */}
         <motion.div
-          className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-radial from-blue-500/30 to-transparent rounded-full blur-3xl"
-          animate={{
-            x: [0, 100, -50, 0],
-            y: [0, -50, 100, 0],
-            scale: [1, 1.2, 0.8, 1],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute top-3/4 right-1/4 w-80 h-80 bg-gradient-radial from-purple-500/40 to-transparent rounded-full blur-2xl"
-          animate={{
-            x: [0, -80, 60, 0],
-            y: [0, 80, -40, 0],
-            scale: [1, 0.9, 1.3, 1],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 2
-          }}
-        />
-        <motion.div
-          className="absolute bottom-1/4 left-1/2 w-64 h-64 bg-gradient-radial from-pink-500/35 to-transparent rounded-full blur-2xl"
-          animate={{
-            x: [0, 120, -80, 0],
-            y: [0, -60, 40, 0],
-            scale: [1, 1.1, 0.9, 1],
-          }}
-          transition={{
-            duration: 18,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 4
-          }}
-        />
-        
-        {/* Floating Chess Pieces */}
-        <motion.div
-          className="absolute top-1/6 left-1/6 text-6xl opacity-10"
+          className={`absolute top-1/6 left-1/6 text-8xl font-bold ${
+            theme === 'dark' ? 'text-white/30' : 'text-gray-800/40'
+          } filter drop-shadow-2xl`}
           animate={{
             rotate: [0, 360],
-            y: [0, -20, 0],
+            y: [0, -30, 0],
+            x: [0, 20, 0],
           }}
           transition={{
             duration: 12,
@@ -139,11 +121,15 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         >
           ♔
         </motion.div>
+        
         <motion.div
-          className="absolute top-1/3 right-1/5 text-5xl opacity-15"
+          className={`absolute top-1/3 right-1/5 text-7xl font-bold ${
+            theme === 'dark' ? 'text-purple-300/40' : 'text-purple-600/50'
+          } filter drop-shadow-xl`}
           animate={{
             rotate: [0, -360],
-            x: [0, 15, 0],
+            x: [0, 25, 0],
+            scale: [1, 1.1, 1],
           }}
           transition={{
             duration: 10,
@@ -154,11 +140,15 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         >
           ♛
         </motion.div>
+        
         <motion.div
-          className="absolute bottom-1/3 left-1/8 text-4xl opacity-10"
+          className={`absolute bottom-1/3 left-1/8 text-6xl font-bold ${
+            theme === 'dark' ? 'text-blue-300/35' : 'text-blue-600/45'
+          } filter drop-shadow-lg`}
           animate={{
             rotate: [0, 180, 360],
-            y: [0, 10, 0],
+            y: [0, 15, 0],
+            x: [0, -10, 0],
           }}
           transition={{
             duration: 14,
@@ -169,76 +159,162 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         >
           ♜
         </motion.div>
-        <motion.div
-          className="absolute bottom-1/6 right-1/3 text-5xl opacity-12"
-          animate={{
-            rotate: [0, -180, 0],
-            x: [0, -10, 0],
-          }}
-          transition={{
-            duration: 16,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 2
-          }}
-        >
-          ♞
-        </motion.div>
-        
-        {/* Animated Grid Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="grid grid-cols-8 h-full">
-            {Array.from({ length: 64 }, (_, i) => (
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 w-full flex items-center justify-center min-h-[calc(100vh-2rem)]">
+        <div className="w-full max-w-4xl flex justify-center">
+          <AnimatePresence mode="wait">
+            {/* Timer Selection */}
+            {showTimerSelect && (
               <motion.div
-                key={i}
-                className={`border border-white/20 ${(Math.floor(i / 8) + (i % 8)) % 2 === 0 ? 'bg-white/5' : 'bg-black/5'}`}
-                animate={{
-                  opacity: [0.05, 0.15, 0.05],
-                }}
-                transition={{
-                  duration: 4,
-                  repeat: Infinity,
-                  delay: i * 0.1,
-                  ease: "easeInOut"
-                }}
-              />
-            ))}
+                key="timer-select"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className={`${
+                  theme === 'dark' 
+                    ? 'bg-white/10 border-white/30 text-white' 
+                    : 'bg-white/80 border-gray-300/50 text-gray-800'
+                } backdrop-blur-xl rounded-3xl shadow-2xl border p-8`}>
+                  <div className="text-center mb-8">
+                    <div className="flex items-center justify-center gap-3 mb-4">
+                      <Clock size={32} className={theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} />
+                      <h2 className="text-3xl font-bold">Game Timer</h2>
+                    </div>
+                    <p className={`text-lg ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>
+                      Choose your preferred time control
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                    <TimerButton
+                      mode="none"
+                      title="No Timer"
+                      description="Play at your own pace"
+                      color="gray"
+                      theme={theme}
+                      onClick={() => handleTimerSelect('none')}
+                    />
+                    <TimerButton
+                      mode="3min"
+                      title="3 Minutes"
+                      description="Fast-paced games"
+                      color="green"
+                      theme={theme}
+                      onClick={() => handleTimerSelect('3min')}
+                    />
+                    <TimerButton
+                      mode="5min"
+                      title="5 Minutes"
+                      description="Balanced gameplay"
+                      color="blue"
+                      theme={theme}
+                      onClick={() => handleTimerSelect('5min')}
+                    />
+                    <TimerButton
+                      mode="10min"
+                      title="10 Minutes"
+                      description="Strategic thinking"
+                      color="purple"
+                      theme={theme}
+                      onClick={() => handleTimerSelect('10min')}
+                    />
+                    
+                    <div className="md:col-span-2">
+                      <div className={`${
+                        theme === 'dark'
+                          ? 'bg-white/5 border-white/20 hover:bg-white/10'
+                          : 'bg-white/60 border-gray-300/40 hover:bg-white/80'
+                      } border rounded-2xl p-6 transition-all duration-300 hover:scale-105`}>
+                        <div className="text-center mb-4">
+                          <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-orange-400' : 'text-orange-600'} mb-2`}>
+                            Custom Timer
+                          </div>
+                          <div className={`text-sm ${theme === 'dark' ? 'text-white/60' : 'text-gray-600'}`}>
+                            Set your own time limit
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 mb-4">
+                          <input
+                            type="range"
+                            min="1"
+                            max="60"
+                            value={customTime}
+                            onChange={(e) => setCustomTime(Number(e.target.value))}
+                            className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <span className={`text-lg font-bold min-w-[4rem] ${
+                            theme === 'dark' ? 'text-white' : 'text-gray-800'
+                          }`}>
+                            {customTime}m
+                          </span>
+                        </div>
+                        
+                        <motion.button
+                          onClick={() => handleTimerSelect('custom')}
+                          className={`w-full py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
+                            theme === 'dark'
+                              ? 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30'
+                              : 'bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-300'
+                          }`}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          Select Custom Timer
+                        </motion.button>
           </div>
         </div>
       </div>
+
+                  <div className="flex justify-center">
+                    <motion.button
+                      onClick={resetMenu}
+                      className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                        theme === 'dark'
+                          ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
+                      }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      ← Back to Game Modes
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
       
       {/* Main Menu Card */}
+            {!showTimerSelect && !showDifficulty && !showRoomInput && (
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 50 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/30 max-w-md w-full relative z-10"
-        style={{
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
-        }}
+                className={`${
+                  theme === 'dark' 
+                    ? 'bg-white/10 border-white/30 text-white' 
+                    : 'bg-white/80 border-gray-300/50 text-gray-800'
+                } backdrop-blur-xl rounded-3xl p-8 shadow-2xl border max-w-xs w-full relative z-10 min-w-fit`}
       >
         <div className="text-center mb-8">
           <motion.h1 
-            className="text-5xl font-bold text-white mb-4 bg-gradient-to-r from-white via-blue-200 to-purple-200 bg-clip-text text-transparent"
+                    className={`text-5xl font-bold mb-4 bg-gradient-to-r whitespace-nowrap ${
+                      theme === 'dark' 
+                        ? 'from-white via-blue-200 to-purple-200' 
+                        : 'from-gray-800 via-blue-600 to-purple-600'
+                    } bg-clip-text text-transparent`}
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.2 }}
-          >
-            <motion.span
-              animate={{ 
-                textShadow: [
-                  '0 0 20px rgba(255,255,255,0.5)',
-                  '0 0 30px rgba(147,197,253,0.8)',
-                  '0 0 20px rgba(255,255,255,0.5)'
-                ]
-              }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             >
               ♔ Chess Master ♛
-            </motion.span>
           </motion.h1>
           <motion.p 
-            className="text-white/80 text-lg font-medium"
+                    className={`${theme === 'dark' ? 'text-white/80' : 'text-gray-600'} text-lg font-medium`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.4 }}
@@ -246,70 +322,48 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
             Choose your game mode
           </motion.p>
           
-          {/* Enhanced Theme selector button */}
           <motion.button
             onClick={onThemeSelect}
-            className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-white/30 rounded-xl transition-all duration-300 text-white font-semibold shadow-lg backdrop-blur-sm"
-            whileHover={{ 
-              scale: 1.05,
-              boxShadow: '0 10px 25px rgba(139, 92, 246, 0.3)'
-            }}
+                    className={`mt-6 px-6 py-3 ${
+                      theme === 'dark'
+                        ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border-white/30 text-white'
+                        : 'bg-gradient-to-r from-purple-200/80 to-pink-200/80 hover:from-purple-300/80 hover:to-pink-300/80 border-gray-400/50 text-gray-800'
+                    } border rounded-xl transition-all duration-300 font-semibold shadow-lg backdrop-blur-sm`}
+                    whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.6 }}
-          >
-            <motion.span
-              animate={{
-                color: ['#ffffff', '#c084fc', '#f472b6', '#ffffff']
-              }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
             >
               🎨 Themes ({selectedTheme})
-            </motion.span>
           </motion.button>
         </div>
 
-        {!selectedMode && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.8 }}
             className="space-y-5"
-          >
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.9 }}
             >
               <GameModeButton
                 icon="🤖"
                 title="Play vs Computer"
                 description="Challenge our AI opponent"
+                    theme={theme}
                 onClick={() => handleModeSelect('computer')}
               />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 1.1 }}
-            >
               <GameModeButton
                 icon="👥"
                 title="Local Multiplayer"
                 description="Play with a friend on this device"
+                    theme={theme}
                 onClick={() => handleModeSelect('local')}
               />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 1.3 }}
-            >
               <GameModeButton
                 icon="🌐"
                 title="Online Multiplayer"
                 description="Play with friends online"
+                    theme={theme}
                 onClick={() => handleModeSelect('online')}
               />
             </motion.div>
@@ -320,11 +374,18 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
-          >
-            <h3 className="text-xl font-semibold text-white text-center mb-4">
+                className={`${
+                  theme === 'dark' 
+                    ? 'bg-white/10 border-white/30 text-white' 
+                    : 'bg-white/80 border-gray-300/50 text-gray-800'
+                } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 max-w-md w-full`}
+              >
+                <h3 className={`text-2xl font-semibold text-center mb-6 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-800'
+                }`}>
               Select Difficulty
             </h3>
+                <div className="space-y-4">
             <DifficultyButton
               level="easy"
               title="Easy"
@@ -348,10 +409,13 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
             />
             <button
               onClick={resetMenu}
-              className="w-full py-2 text-white/70 hover:text-white transition-colors"
+                    className={`w-full py-2 ${
+                      theme === 'dark' ? 'text-white/70 hover:text-white' : 'text-gray-600 hover:text-gray-800'
+                    } transition-colors`}
             >
               ← Back
             </button>
+                </div>
           </motion.div>
         )}
 
@@ -359,12 +423,19 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
-          >
-            <h3 className="text-xl font-semibold text-white text-center mb-4">
+                className={`${
+                  theme === 'dark' 
+                    ? 'bg-white/10 border-white/30 text-white' 
+                    : 'bg-white/80 border-gray-300/50 text-gray-800'
+                } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 max-w-md w-full`}
+              >
+                <h3 className={`text-2xl font-semibold text-center mb-6 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-800'
+                }`}>
               Online Multiplayer
             </h3>
             
+                <div className="space-y-4">
             <button
               onClick={() => handleOnlineGame(true)}
               className="w-full p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold"
@@ -372,7 +443,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
               🏠 Host a Game
             </button>
             
-            <div className="text-center text-white/50">or</div>
+                  <div className={`text-center ${theme === 'dark' ? 'text-white/50' : 'text-gray-500'}`}>or</div>
             
             <div className="space-y-3">
               <input
@@ -380,7 +451,11 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
                 placeholder="Enter room code"
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`w-full p-3 ${
+                        theme === 'dark' 
+                          ? 'bg-white/10 border-white/20 text-white placeholder-white/50' 
+                          : 'bg-white/60 border-gray-300 text-gray-800 placeholder-gray-500'
+                      } border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 maxLength={6}
               />
               <button
@@ -394,13 +469,18 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
             
             <button
               onClick={resetMenu}
-              className="w-full py-2 text-white/70 hover:text-white transition-colors"
+                    className={`w-full py-2 ${
+                      theme === 'dark' ? 'text-white/70 hover:text-white' : 'text-gray-600 hover:text-gray-800'
+                    } transition-colors`}
             >
               ← Back
             </button>
+                </div>
           </motion.div>
         )}
-      </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }
@@ -409,65 +489,33 @@ interface GameModeButtonProps {
   icon: string;
   title: string;
   description: string;
+  theme: string;
   onClick: () => void;
 }
 
-function GameModeButton({ icon, title, description, onClick }: GameModeButtonProps) {
+function GameModeButton({ icon, title, description, theme, onClick }: GameModeButtonProps) {
   return (
     <motion.button
-      whileHover={{ 
-        scale: 1.03,
-        y: -2,
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-      }}
+      whileHover={{ scale: 1.03, y: -3 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className="w-full p-6 bg-gradient-to-r from-white/10 to-white/5 hover:from-white/20 hover:to-white/15 border border-white/30 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden backdrop-blur-sm"
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
+      className={`w-full p-5 ${
+        theme === 'dark'
+          ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+          : 'bg-white/60 hover:bg-white/80 text-gray-800 border border-gray-300'
+      } rounded-2xl transition-all duration-300 text-left relative overflow-hidden shadow-lg backdrop-blur-sm`}
     >
-      {/* Animated background gradient */}
-      <motion.div
-        className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-purple-500/0 to-pink-500/0 group-hover:from-blue-500/10 group-hover:via-purple-500/10 group-hover:to-pink-500/10 transition-all duration-500"
-        initial={{ opacity: 0 }}
-        whileHover={{ opacity: 1 }}
-      />
-      
-      <div className="flex items-center space-x-4 relative z-10">
-        <motion.div 
-          className="text-4xl"
-          whileHover={{ 
-            scale: 1.2,
-            rotate: [0, -10, 10, 0],
-          }}
-          transition={{ duration: 0.3 }}
-        >
-          {icon}
-        </motion.div>
+      <div className="relative z-10 flex items-center gap-4">
+        <div className="text-3xl">{icon}</div>
         <div>
-          <motion.h3 
-            className="text-xl font-bold text-white group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-blue-300 group-hover:to-purple-300 group-hover:bg-clip-text transition-all duration-300"
-            whileHover={{ x: 5 }}
-          >
+          <h3 className={`text-xl font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
             {title}
-          </motion.h3>
-          <motion.p 
-            className="text-white/80 text-sm font-medium group-hover:text-white/90 transition-colors duration-300"
-            whileHover={{ x: 5 }}
-          >
+          </h3>
+          <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>
             {description}
-          </motion.p>
+          </p>
         </div>
       </div>
-      
-      {/* Shimmer effect */}
-      <motion.div
-        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100"
-        initial={{ x: '-100%' }}
-        whileHover={{ x: '200%' }}
-        transition={{ duration: 0.6, ease: "easeInOut" }}
-      />
     </motion.button>
   );
 }
@@ -483,41 +531,49 @@ interface DifficultyButtonProps {
 function DifficultyButton({ level, title, description, color, onClick }: DifficultyButtonProps) {
   return (
     <motion.button
-      whileHover={{ 
-        scale: 1.03,
-        y: -3,
-        boxShadow: '0 15px 30px rgba(0, 0, 0, 0.4)',
-      }}
+      whileHover={{ scale: 1.03, y: -3 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
       className={`w-full p-5 ${color} hover:brightness-110 text-white rounded-2xl transition-all duration-300 text-left relative overflow-hidden shadow-lg`}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
     >
-      {/* Animated shine effect */}
-      <motion.div
-        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 opacity-0"
-        whileHover={{ 
-          opacity: 1,
-          x: ['0%', '200%']
-        }}
-        transition={{ duration: 0.8, ease: "easeInOut" }}
-      />
-      
       <div className="relative z-10">
-        <motion.h3 
-          className="text-xl font-bold mb-1"
-          whileHover={{ x: 3 }}
-        >
-          {title}
-        </motion.h3>
-        <motion.p 
-          className="text-white/95 text-sm font-medium"
-          whileHover={{ x: 3 }}
-        >
-          {description}
-        </motion.p>
+        <h3 className="text-xl font-bold mb-1">{title}</h3>
+        <p className="text-white/95 text-sm font-medium">{description}</p>
+      </div>
+    </motion.button>
+  );
+}
+
+interface TimerButtonProps {
+  mode: TimerMode;
+  title: string;
+  description: string;
+  color: string;
+  theme: string;
+  onClick: () => void;
+}
+
+function TimerButton({ mode, title, description, color, theme, onClick }: TimerButtonProps) {
+  const colorMap = {
+    gray: theme === 'dark' ? 'from-gray-500/20 to-gray-600/20 border-gray-500/30' : 'from-gray-200 to-gray-300 border-gray-400',
+    green: theme === 'dark' ? 'from-green-500/20 to-green-600/20 border-green-500/30' : 'from-green-200 to-green-300 border-green-400',
+    blue: theme === 'dark' ? 'from-blue-500/20 to-blue-600/20 border-blue-500/30' : 'from-blue-200 to-blue-300 border-blue-400',
+    purple: theme === 'dark' ? 'from-purple-500/20 to-purple-600/20 border-purple-500/30' : 'from-purple-200 to-purple-300 border-purple-400',
+    orange: theme === 'dark' ? 'from-orange-500/20 to-orange-600/20 border-orange-500/30' : 'from-orange-200 to-orange-300 border-orange-400'
+  };
+
+  return (
+    <motion.button
+      onClick={onClick}
+      className={`p-6 rounded-2xl border transition-all duration-300 hover:scale-105 bg-gradient-to-br ${colorMap[color as keyof typeof colorMap]} ${
+        theme === 'dark' ? 'text-white hover:bg-white/10' : 'text-gray-800 hover:bg-gray-100'
+      }`}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <div className="text-center">
+        <div className="text-2xl font-bold mb-2">{title}</div>
+        <div className={`text-sm ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>{description}</div>
       </div>
     </motion.button>
   );

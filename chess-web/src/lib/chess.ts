@@ -337,7 +337,8 @@ export function makeMove(gameState: GameState, move: Move): GameState {
     capturedPieces: newCapturedPieces,
     enPassantTarget,
     halfmoveClock: piece.type === 'pawn' || move.capturedPiece ? 0 : gameState.halfmoveClock + 1,
-    fullmoveNumber: gameState.currentPlayer === 'black' ? gameState.fullmoveNumber + 1 : gameState.fullmoveNumber
+    fullmoveNumber: gameState.currentPlayer === 'black' ? gameState.fullmoveNumber + 1 : gameState.fullmoveNumber,
+    timer: gameState.timer
   };
 
   // Update game status
