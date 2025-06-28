@@ -1,12 +1,12 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { ThemeProvider } from '@/lib/ThemeContext';
+import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Chess Game with Music Player',
-  description: 'A multiplayer chess game with integrated music player built with Next.js',
+  title: 'Chess Game',
+  description: 'A multiplayer chess game with music player',
 };
 
 export default function RootLayout({
@@ -17,9 +17,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider>
+        <Providers>
           {children}
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );
