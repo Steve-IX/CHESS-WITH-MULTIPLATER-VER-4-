@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { GameMode, Difficulty, ThemeId } from '@/lib/types';
+import { useTheme } from '@/lib/ThemeContext';
+import { Sun, Moon } from 'lucide-react';
 
 interface GameMenuProps {
   onGameStart: (mode: GameMode, difficulty?: Difficulty, roomId?: string, themeId?: ThemeId) => void;
@@ -16,6 +18,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
   const [roomId, setRoomId] = useState('');
   const [showDifficulty, setShowDifficulty] = useState(false);
   const [showRoomInput, setShowRoomInput] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const handleModeSelect = (mode: GameMode) => {
     setSelectedMode(mode);
@@ -53,6 +56,29 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
+      {/* Theme Toggle Button */}
+      <motion.button
+        onClick={toggleTheme}
+        className="fixed top-4 right-4 z-50 p-3 bg-white/10 backdrop-blur-xl border border-white/30 rounded-full hover:bg-white/20 transition-all duration-300"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+      >
+        <motion.div
+          animate={{ rotate: theme === 'dark' ? 0 : 180 }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
+        >
+          {theme === 'dark' ? (
+            <Sun size={24} className="text-yellow-400" />
+          ) : (
+            <Moon size={24} className="text-blue-400" />
+          )}
+        </motion.div>
+      </motion.button>
+
       {/* Animated Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
         {/* Floating Orbs */}

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChessGame } from '@/components/ChessGame';
 import { GameMenu } from '@/components/GameMenu';
 import { ThemeSelector } from '@/components/ThemeSelector';
+import { MusicPlayer } from '@/components/MusicPlayer';
 import { GameMode, Difficulty, GameResult, ThemeId } from '@/lib/types';
 import { chessSocket } from '@/lib/socket';
 
@@ -88,39 +89,48 @@ export default function Home() {
 
   if (showThemeSelector) {
     return (
-      <ThemeSelector 
-        selectedTheme={selectedTheme}
-        onThemeSelect={handleThemeChange}
-        onBack={handleBackFromThemes}
-      />
+      <>
+        <ThemeSelector 
+          selectedTheme={selectedTheme}
+          onThemeSelect={handleThemeChange}
+          onBack={handleBackFromThemes}
+        />
+        <MusicPlayer />
+      </>
     );
   }
 
   if (!gameStarted || !currentMode) {
     return (
-      <GameMenu 
-        onGameStart={handleGameStart}
-        onThemeSelect={handleThemeSelect}
-        selectedTheme={selectedTheme}
-      />
+      <>
+        <GameMenu 
+          onGameStart={handleGameStart}
+          onThemeSelect={handleThemeSelect}
+          selectedTheme={selectedTheme}
+        />
+        <MusicPlayer />
+      </>
     );
   }
 
   return (
-    <div className="relative">
-      <button
-        onClick={handleBackToMenu}
-        className="absolute top-4 left-4 z-10 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
-      >
-        ← Back to Menu
-      </button>
-      
-      <ChessGame
-        gameMode={currentMode}
-        difficulty={difficulty}
-        themeId={selectedTheme}
-        onGameOver={handleGameOver}
-      />
-    </div>
+    <>
+      <div className="relative">
+        <button
+          onClick={handleBackToMenu}
+          className="absolute top-4 left-4 z-10 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
+        >
+          ← Back to Menu
+        </button>
+        
+        <ChessGame
+          gameMode={currentMode}
+          difficulty={difficulty}
+          themeId={selectedTheme}
+          onGameOver={handleGameOver}
+        />
+      </div>
+      <MusicPlayer />
+    </>
   );
 }
