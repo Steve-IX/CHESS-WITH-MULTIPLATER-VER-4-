@@ -326,8 +326,8 @@ export const MusicPlayer = () => {
 
             // This will trigger handlePlay which sets up the new context
             await audioRef.current.play();
-          } catch (error) {
-            if (error.name !== 'AbortError') {
+          } catch (error: unknown) {
+            if (error instanceof Error && error.name !== 'AbortError') {
               console.error('Error auto-playing new track:', error);
               setIsPlaying(false);
             }
@@ -352,13 +352,15 @@ export const MusicPlayer = () => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    let playbackTimeout: NodeJS.Timeout;
-    let visualizerTimeout: NodeJS.Timeout;
+    let playbackTimeout: NodeJS.Timeout | undefined;
+    let visualizerTimeout: NodeJS.Timeout | undefined;
 
     const handleLoadedMetadata = () => {
-      if (audioRef.current) {
-        setDuration(audioRef.current.duration);
-      }
+      playbackTimeout = setTimeout(() => {
+        if (audioRef.current) {
+          setDuration(audioRef.current.duration);
+        }
+      }, 50);
     };
 
     const handleTimeUpdate = () => {
