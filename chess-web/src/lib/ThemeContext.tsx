@@ -29,7 +29,7 @@ export const THEME_COLORS = {
 interface ThemeContextType {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
-  colors: typeof THEME_COLORS[keyof typeof THEME_COLORS];
+  colors: typeof THEME_COLORS.dark;
   isTransitioning: boolean;
 }
 

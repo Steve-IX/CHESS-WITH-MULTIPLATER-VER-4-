@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const path = require('path');
-
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
@@ -14,11 +12,6 @@ const nextConfig = {
       os: false,
       tls: false,
       fs: false,
-    };
-    // Add path alias resolution
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@': path.join(__dirname, 'src'),
     };
     return config;
   },
