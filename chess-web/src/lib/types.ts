@@ -3,6 +3,7 @@ export type PlayerColor = 'white' | 'black';
 export type GameMode = 'local' | 'computer' | 'online';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type ThemeId = 'classic' | 'mahogany' | 'emerald' | 'midnight' | 'crystal';
+export type TimerMode = '3min' | '5min' | '10min' | 'custom' | 'none';
 
 export interface Position {
   x: number;
@@ -25,6 +26,14 @@ export interface Move {
   promotion?: PieceType;
 }
 
+export interface TimerState {
+  whiteTime: number; // in seconds
+  blackTime: number; // in seconds
+  isActive: boolean;
+  mode: TimerMode;
+  increment?: number; // increment in seconds per move
+}
+
 export interface GameState {
   board: (Piece | null)[][];
   currentPlayer: PlayerColor;
@@ -39,6 +48,7 @@ export interface GameState {
   enPassantTarget: Position | null;
   halfmoveClock: number;
   fullmoveNumber: number;
+  timer?: TimerState;
 }
 
 export interface ChessGameProps {
@@ -48,6 +58,8 @@ export interface ChessGameProps {
   isSpectator?: boolean;
   difficulty?: Difficulty;
   themeId?: ThemeId;
+  timerMode?: TimerMode;
+  customTime?: number;
   onMove?: (move: Move) => void;
   onGameOver?: (result: GameResult) => void;
 }

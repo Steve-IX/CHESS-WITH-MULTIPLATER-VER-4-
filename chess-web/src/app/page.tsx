@@ -5,7 +5,7 @@ import { ChessGame } from '@/components/ChessGame';
 import { GameMenu } from '@/components/GameMenu';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { MusicPlayer } from '@/components/MusicPlayer';
-import { GameMode, Difficulty, GameResult, ThemeId } from '@/lib/types';
+import { GameMode, Difficulty, GameResult, ThemeId, TimerMode } from '@/lib/types';
 import { chessSocket } from '@/lib/socket';
 
 export default function Home() {
@@ -15,8 +15,17 @@ export default function Home() {
   const [gameStarted, setGameStarted] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>('classic');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [timerMode, setTimerMode] = useState<TimerMode>('none');
+  const [customTime, setCustomTime] = useState<number>(15);
 
-  const handleGameStart = async (mode: GameMode, diff?: Difficulty, roomCode?: string, themeId?: ThemeId) => {
+  const handleGameStart = async (
+    mode: GameMode, 
+    diff?: Difficulty, 
+    roomCode?: string, 
+    themeId?: ThemeId, 
+    timer?: TimerMode, 
+    customTimerValue?: number
+  ) => {
     setCurrentMode(mode);
     
     if (diff) {
@@ -25,6 +34,14 @@ export default function Home() {
 
     if (themeId) {
       setSelectedTheme(themeId);
+    }
+
+    if (timer) {
+      setTimerMode(timer);
+    }
+
+    if (customTimerValue) {
+      setCustomTime(customTimerValue);
     }
 
     if (mode === 'online') {
@@ -69,6 +86,7 @@ export default function Home() {
     setCurrentMode(null);
     setRoomId(null);
     setShowThemeSelector(false);
+    setTimerMode('none');
     
     if (chessSocket) {
       chessSocket.disconnect();
@@ -127,6 +145,8 @@ export default function Home() {
           gameMode={currentMode}
           difficulty={difficulty}
           themeId={selectedTheme}
+          timerMode={timerMode}
+          customTime={customTime}
           onGameOver={handleGameOver}
         />
       </div>
