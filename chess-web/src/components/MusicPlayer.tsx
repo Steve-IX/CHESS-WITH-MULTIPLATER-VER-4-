@@ -326,8 +326,8 @@ export const MusicPlayer = () => {
 
             // This will trigger handlePlay which sets up the new context
             await audioRef.current.play();
-          } catch (error) {
-            if (error.name !== 'AbortError') {
+          } catch (error: unknown) {
+            if (error instanceof Error && error.name !== 'AbortError') {
               console.error('Error auto-playing new track:', error);
               setIsPlaying(false);
             }
