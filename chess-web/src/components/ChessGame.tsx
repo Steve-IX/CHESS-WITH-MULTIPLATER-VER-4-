@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId } from '@/lib/types';
+import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode } from '@/lib/types';
 import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '@/lib/chess';
 import { chessAI } from '@/lib/ai';
 import { chessSocket } from '@/lib/socket';
 import { getThemeById } from '@/lib/themes';
+import { Clock, Play, Pause } from 'lucide-react';
 
 const PIECE_SYMBOLS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -39,13 +40,85 @@ const ChessPiece = ({ piece, isHovered, themeId }: { piece: Piece; isHovered: bo
   );
 };
 
+// Timer display component
+const TimerDisplay = ({ 
+  time, 
+  isActive, 
+  player, 
+  themeId 
+}: { 
+  time: number; 
+  isActive: boolean; 
+  player: PlayerColor; 
+  themeId: ThemeId 
+}) => {
+  const minutes = Math.floor(time / 60);
+  const seconds = time % 60;
+  const theme = getThemeById(themeId);
+  
+  const isLowTime = time <= 30;
+  
+  return (
+    <motion.div
+      className={`
+        flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-300
+        ${isActive 
+          ? `border-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/30` 
+          : `border-gray-400/50 bg-gray-500/10`
+        }
+        ${isLowTime && isActive ? 'animate-pulse border-red-400 bg-red-500/20' : ''}
+      `}
+      animate={{
+        scale: isActive ? 1.02 : 1,
+      }}
+      transition={{ duration: 0.2 }}
+    >
+      <Clock size={20} className={isActive ? 'text-blue-400' : 'text-gray-400'} />
+      <div className="flex flex-col">
+        <div className={`text-xs font-medium ${player === 'white' ? 'text-gray-600' : 'text-gray-300'}`}>
+          {player === 'white' ? 'White' : 'Black'}
+        </div>
+        <div className={`
+          text-lg font-bold font-mono
+          ${isLowTime && isActive ? 'text-red-400' : (isActive ? 'text-blue-400' : 'text-gray-400')}
+        `}>
+          {minutes}:{seconds.toString().padStart(2, '0')}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 export function ChessGame({
   gameMode = 'local',
   difficulty = 'medium',
   playerColor = 'white',
   themeId = 'classic',
+  timerMode = 'none',
+  customTime = 15,
   onGameOver,
 }: ChessGameProps) {
+  
+  // Initialize timer state
+  const getInitialTimerState = (): TimerState | undefined => {
+    if (timerMode === 'none') return undefined;
+    
+    let timeInSeconds = 0;
+    switch (timerMode) {
+      case '3min': timeInSeconds = 3 * 60; break;
+      case '5min': timeInSeconds = 5 * 60; break;
+      case '10min': timeInSeconds = 10 * 60; break;
+      case 'custom': timeInSeconds = (customTime || 15) * 60; break;
+    }
+    
+    return {
+      whiteTime: timeInSeconds,
+      blackTime: timeInSeconds,
+      isActive: false,
+      mode: timerMode,
+    };
+  };
+
   const initialState: GameState = {
     board: createInitialBoard(),
     currentPlayer: 'white',
@@ -57,6 +130,7 @@ export function ChessGame({
     enPassantTarget: null,
     halfmoveClock: 0,
     fullmoveNumber: 1,
+    timer: getInitialTimerState(),
   };
 
   const [gameState, setGameState] = useState<GameState>(initialState);
@@ -70,9 +144,63 @@ export function ChessGame({
   const [moveNotations, setMoveNotations] = useState<string[]>([]);
   const [isPanelMinimized, setIsPanelMinimized] = useState(false);
   const [isAIThinking, setIsAIThinking] = useState(false);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [hasGameStarted, setHasGameStarted] = useState(false);
+  
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Get current theme
   const theme = getThemeById(themeId);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (!gameState.timer || !gameState.timer.isActive || isTimerPaused || gameState.isCheckmate || gameState.isStalemate) {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      return;
+    }
+
+    timerIntervalRef.current = setInterval(() => {
+      setGameState(prevState => {
+        if (!prevState.timer) return prevState;
+        
+        const currentPlayer = prevState.currentPlayer;
+        const timeKey = currentPlayer === 'white' ? 'whiteTime' : 'blackTime';
+        const newTime = prevState.timer[timeKey] - 1;
+        
+        // Check for timeout
+        if (newTime <= 0) {
+          const winner = currentPlayer === 'white' ? 'black' : 'white';
+          onGameOver?.({ winner, reason: 'timeout' });
+          
+          return {
+            ...prevState,
+            timer: {
+              ...prevState.timer,
+              [timeKey]: 0,
+              isActive: false,
+            },
+          };
+        }
+        
+        return {
+          ...prevState,
+          timer: {
+            ...prevState.timer,
+            [timeKey]: newTime,
+          },
+        };
+      });
+    }, 1000);
+
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, [gameState.timer?.isActive, gameState.currentPlayer, isTimerPaused, gameState.isCheckmate, gameState.isStalemate, onGameOver]);
 
   // Initialize multiplayer if needed
   useEffect(() => {
@@ -177,10 +305,15 @@ export function ChessGame({
   };
 
   const handleSquareClick = useCallback(async (position: Position) => {
-    if (isAnimating) return;
+    if (isAnimating || isAIThinking) return;
     
     // Online multiplayer turn validation
     if (gameMode === 'online' && gameState.currentPlayer !== playerColor) {
+      return;
+    }
+
+    // Computer game turn validation
+    if (gameMode === 'computer' && gameState.currentPlayer !== playerColor) {
       return;
     }
 
@@ -198,71 +331,102 @@ export function ChessGame({
         
         await handleMove(move);
       }
-      
-      // Clear selection
+      // Deselect if clicking the same square or an invalid move
       setSelectedSquare(null);
       setLegalMoves([]);
-    } else if (piece && piece.color === gameState.currentPlayer) {
-      // Select piece
-      setSelectedSquare(position);
-      const moves = calculateLegalMoves(gameState, position);
-      setLegalMoves(moves);
+    } else {
+      // Select a piece
+      if (piece && piece.color === gameState.currentPlayer) {
+        if (gameMode === 'online' && piece.color !== playerColor) {
+          return; // Can't select opponent's pieces in online mode
+        }
+        
+        setSelectedSquare(position);
+        const moves = calculateLegalMoves(gameState, position);
+        setLegalMoves(moves);
+      }
     }
-  }, [gameState, selectedSquare, legalMoves, isAnimating, gameMode, playerColor]);
+  }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking]);
 
   const handleMove = async (move: Move) => {
     setIsAnimating(true);
     
-    // Add move notation
-    const notation = generateMoveNotation(move);
-    setMoveNotations(prev => [...prev, notation]);
-    
-    // Animate the move
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const newGameState = makeMove(gameState, move);
-    setGameState(newGameState);
-    
-    // Send move in multiplayer
-    if (gameMode === 'online') {
-      chessSocket.sendMove(move);
-    }
-    
-    setIsAnimating(false);
-
-    // Check for game over
-    if (newGameState.isCheckmate || newGameState.isStalemate) {
-      const result = {
-        winner: newGameState.isCheckmate ? 
-          (newGameState.currentPlayer === 'white' ? 'black' : 'white') as PlayerColor : 
-          'draw' as const,
-        reason: (newGameState.isCheckmate ? 'checkmate' : 'stalemate') as 'checkmate' | 'stalemate'
-      };
-      onGameOver?.(result);
+    try {
+      let newGameState = makeMove(gameState, move);
+      
+      // Start timer on first move - merge with the move state update
+      if (!hasGameStarted && newGameState.timer) {
+        setHasGameStarted(true);
+        newGameState = {
+          ...newGameState,
+          timer: newGameState.timer ? { ...newGameState.timer, isActive: true } : undefined
+        };
+      }
+      
+      setGameState(newGameState);
+      
+      // Add move notation
+      const notation = generateMoveNotation(move);
+      setMoveNotations(prev => [...prev, notation]);
+      
+      // Clear selection
+      setSelectedSquare(null);
+      setLegalMoves([]);
+      
+      // Send move if online
+      if (gameMode === 'online') {
+        await chessSocket.sendMove(move);
+      }
+      
+      // Check for game end
+      if (newGameState.isCheckmate) {
+        const winner = newGameState.currentPlayer === 'white' ? 'black' : 'white';
+        onGameOver?.({ winner, reason: 'checkmate' });
+      } else if (newGameState.isStalemate) {
+        onGameOver?.({ winner: 'draw', reason: 'stalemate' });
+      }
+      
+    } catch (error) {
+      console.error('Error making move:', error);
+    } finally {
+      setTimeout(() => setIsAnimating(false), 300);
     }
   };
 
   const updateGameStatus = () => {
     if (gameState.isCheckmate) {
       const winner = gameState.currentPlayer === 'white' ? 'Black' : 'White';
-      setGameStatus(`Checkmate! ${winner} wins!`);
+      setGameStatus(`${winner} wins by checkmate!`);
     } else if (gameState.isStalemate) {
-      setGameStatus('Stalemate! Game is a draw.');
-    } else if (isAIThinking && gameMode === 'computer' && gameState.currentPlayer !== playerColor) {
-      setGameStatus(`AI is thinking... (${difficulty} difficulty)`);
+      setGameStatus('Game ended in stalemate');
     } else if (gameState.isCheck) {
-      setGameStatus(`${gameState.currentPlayer === 'white' ? 'White' : 'Black'} is in check!`);
+      const player = gameState.currentPlayer === 'white' ? 'White' : 'Black';
+      setGameStatus(`${player} is in check`);
+    } else if (gameMode === 'computer' && isAIThinking) {
+      setGameStatus(`AI (${difficulty}) is thinking...`);
+    } else if (gameMode === 'online' && isWaitingForOpponent) {
+      setGameStatus('Waiting for opponent...');
     } else {
-      setGameStatus(`${gameState.currentPlayer === 'white' ? 'White' : 'Black'} to move`);
+      const player = gameState.currentPlayer === 'white' ? 'White' : 'Black';
+      setGameStatus(`${player} to move`);
     }
   };
 
   const resetGame = () => {
-    setGameState(initialState);
+    const newInitialState = {
+      ...initialState,
+      timer: getInitialTimerState(),
+    };
+    setGameState(newInitialState);
     setSelectedSquare(null);
     setLegalMoves([]);
     setMoveNotations([]);
-    setGameStatus('');
+    setIsTimerPaused(false);
+    setHasGameStarted(false);
+  };
+
+  const toggleTimer = () => {
+    setIsTimerPaused(prev => !prev);
   };
 
   const isSquareHighlighted = (x: number, y: number): boolean => {
@@ -296,10 +460,80 @@ export function ChessGame({
         </>
       )}
       <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start relative z-10">
+        {/* Timer Panel - Left Side */}
+        {gameState.timer && (
+          <div className="lg:flex-shrink-0 lg:w-64">
+            <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6 space-y-6">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center justify-center gap-2">
+                  <Clock size={24} className="text-blue-600" />
+                  Game Timer
+                </h3>
+                <div className="text-sm text-slate-600 font-medium">
+                  {gameState.timer.mode === 'custom' 
+                    ? `${Math.floor((customTime || 15))} min` 
+                    : gameState.timer.mode === 'none' 
+                      ? 'No timer' 
+                      : gameState.timer.mode.replace('min', ' min')
+                  }
+                </div>
+              </div>
+
+              {/* Black Timer */}
+              <div className="space-y-3">
+                <div className="text-center text-sm font-medium text-slate-600">Black Player</div>
+                <TimerDisplay 
+                  time={gameState.timer.blackTime}
+                  isActive={gameState.currentPlayer === 'black' && gameState.timer.isActive && !isTimerPaused}
+                  player="black"
+                  themeId={themeId}
+                />
+              </div>
+
+              {/* Timer Controls */}
+              <div className="flex flex-col gap-3">
+                <motion.button
+                  onClick={toggleTimer}
+                  className={`
+                    flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-300
+                    ${isTimerPaused 
+                      ? 'bg-green-500 hover:bg-green-600 text-white' 
+                      : 'bg-orange-500 hover:bg-orange-600 text-white'
+                    }
+                  `}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  disabled={gameState.isCheckmate || gameState.isStalemate || !hasGameStarted}
+                >
+                  {isTimerPaused ? <Play size={16} /> : <Pause size={16} />}
+                  {isTimerPaused ? 'Resume' : 'Pause'}
+                </motion.button>
+                
+                {!hasGameStarted && gameState.timer.mode !== 'none' && (
+                  <div className="text-center text-sm text-slate-600 bg-yellow-100/80 rounded-lg p-3">
+                    Timer will start when White makes the first move
+                  </div>
+                )}
+              </div>
+
+              {/* White Timer */}
+              <div className="space-y-3">
+                <div className="text-center text-sm font-medium text-slate-600">White Player</div>
+                <TimerDisplay 
+                  time={gameState.timer.whiteTime}
+                  isActive={gameState.currentPlayer === 'white' && gameState.timer.isActive && !isTimerPaused}
+                  player="white"
+                  themeId={themeId}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Game Board */}
-        <div className="flex flex-col items-center lg:flex-shrink-0">
-          <div className="mb-4 text-center">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Chess Master</h2>
+        <div className="flex flex-col items-center flex-none min-w-fit">
+          <div className="mb-4 text-center min-w-max">
+            <h2 className="text-2xl font-bold text-slate-800 mb-2 whitespace-nowrap inline-block">Chess Master</h2>
             <div className="text-lg font-semibold text-slate-600">
               {gameStatus}
             </div>
