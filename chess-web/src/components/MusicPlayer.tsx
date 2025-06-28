@@ -352,8 +352,8 @@ export const MusicPlayer = () => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    let playbackTimeout: NodeJS.Timeout;
-    let visualizerTimeout: NodeJS.Timeout;
+    let playbackTimeout: NodeJS.Timeout | undefined;
+    let visualizerTimeout: NodeJS.Timeout | undefined;
 
     const handleLoadedMetadata = () => {
       if (audioRef.current) {
