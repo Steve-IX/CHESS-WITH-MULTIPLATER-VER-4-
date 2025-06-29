@@ -235,8 +235,8 @@ export function ChessGame({
     try {
       await chessSocket.connect();
       
-      chessSocket.onMove((move: Move) => {
-        setGameState(prevState => makeMove(prevState, move));
+      chessSocket.onMoveMade((data) => {
+        setGameState(data.gameState);
       });
 
       chessSocket.onPlayerJoined(() => {
@@ -375,7 +375,7 @@ export function ChessGame({
     
       // Send move if online
     if (gameMode === 'online') {
-        await chessSocket.sendMove(move);
+        chessSocket.makeMove(move);
     }
 
       // Check for game end
