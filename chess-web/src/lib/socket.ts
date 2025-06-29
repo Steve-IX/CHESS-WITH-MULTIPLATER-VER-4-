@@ -8,22 +8,30 @@ export class ChessSocket {
 
   constructor() {
     // Get the base URL for the Socket.IO connection
-    const baseURL = process.env.NEXT_PUBLIC_SOCKET_URL || 
+    const baseURL = process.env.NEXT_PUBLIC_SITE_URL || 
       (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
     // Initialize socket connection
     this.socket = io(baseURL, {
       autoConnect: false,
       path: '/api/socket',
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionDelay: 1000,
+      timeout: 20000,
+      forceNew: true,
+      withCredentials: true
     });
 
     // Add error logging
     if (this.socket) {
       this.socket.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
+        // Fallback to polling if WebSocket fails
+        if (this.socket?.io?.opts?.transports?.includes('websocket')) {
+          console.log('Falling back to polling transport');
+          this.socket.io.opts.transports = ['polling', 'websocket'];
+        }
       });
 
       this.socket.on('connect_timeout', () => {
@@ -32,6 +40,14 @@ export class ChessSocket {
 
       this.socket.on('error', (error) => {
         console.error('Socket error:', error);
+      });
+
+      this.socket.on('reconnect_attempt', () => {
+        console.log('Attempting to reconnect...');
+      });
+
+      this.socket.on('reconnect', () => {
+        console.log('Reconnected successfully');
       });
     }
   }

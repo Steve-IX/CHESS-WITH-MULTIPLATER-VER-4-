@@ -1,3 +1,16 @@
 {
-  "framework": "nextjs"
+  "version": 2,
+  "functions": {
+    "api/socket.ts": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/socket/(.*)",
+      "destination": "/api/socket"
+    }
+  ]
 } 

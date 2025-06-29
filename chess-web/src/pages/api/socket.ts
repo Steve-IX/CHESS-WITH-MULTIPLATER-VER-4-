@@ -42,11 +42,19 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       },
       transports: ['websocket', 'polling'],
       pingTimeout: 60000,
-      pingInterval: 25000
+      pingInterval: 25000,
+      upgradeTimeout: 30000,
+      allowUpgrades: true,
+      cookie: false,
+      serveClient: false
     });
 
     io.on('connection', (socket) => {
       console.log('Client connected:', socket.id);
+
+      socket.on('error', (error) => {
+        console.error('Socket error:', error);
+      });
 
       // Handle room creation
       socket.on('create-room', () => {
