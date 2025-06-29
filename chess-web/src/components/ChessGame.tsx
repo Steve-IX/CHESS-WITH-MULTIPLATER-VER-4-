@@ -14,14 +14,14 @@ const PIECE_SYMBOLS = {
   black: { king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟' }
 };
 
-// Enhanced piece styling component
+// Enhanced piece styling component - Mobile Responsive
 const ChessPiece = ({ piece, isHovered, themeId }: { piece: Piece; isHovered: boolean; themeId: ThemeId }) => {
   const theme = getThemeById(themeId);
   
   return (
     <motion.div
       className={`
-        text-5xl select-none z-10 font-bold relative
+        text-2xl sm:text-3xl md:text-4xl lg:text-5xl select-none z-10 font-bold relative
         ${piece.color === 'white' ? theme.whitePieceColor : theme.blackPieceColor}
         ${piece.color === 'white' ? theme.whitePieceShadow : theme.blackPieceShadow}
         filter transition-all duration-200
@@ -40,7 +40,7 @@ const ChessPiece = ({ piece, isHovered, themeId }: { piece: Piece; isHovered: bo
   );
 };
 
-// Timer display component
+// Timer display component - Mobile Responsive
 const TimerDisplay = ({ 
   time, 
   isActive, 
@@ -61,7 +61,7 @@ const TimerDisplay = ({
   return (
     <motion.div
       className={`
-        flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-300
+        flex items-center gap-2 sm:gap-3 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl border-2 transition-all duration-300
         ${isActive 
           ? `border-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/30` 
           : `border-gray-400/50 bg-gray-500/10`
@@ -73,13 +73,13 @@ const TimerDisplay = ({
       }}
       transition={{ duration: 0.2 }}
     >
-      <Clock size={20} className={isActive ? 'text-blue-400' : 'text-gray-400'} />
-      <div className="flex flex-col">
-        <div className={`text-xs font-medium ${player === 'white' ? 'text-gray-600' : 'text-gray-300'}`}>
+      <Clock size={16} className={`${isActive ? 'text-blue-400' : 'text-gray-400'} sm:w-5 sm:h-5`} />
+      <div className="flex flex-col min-w-0">
+        <div className={`text-xs font-medium ${player === 'white' ? 'text-gray-600' : 'text-gray-300'} hidden xl:block`}>
           {player === 'white' ? 'White' : 'Black'}
         </div>
         <div className={`
-          text-lg font-bold font-mono
+          text-sm sm:text-base lg:text-lg font-bold font-mono
           ${isLowTime && isActive ? 'text-red-400' : (isActive ? 'text-blue-400' : 'text-gray-400')}
         `}>
           {minutes}:{seconds.toString().padStart(2, '0')}
@@ -459,88 +459,93 @@ export function ChessGame({
           </div>
         </>
       )}
-      <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start relative z-10">
-        {/* Timer Panel - Left Side */}
+      <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 lg:gap-8 max-w-7xl mx-auto justify-center items-center xl:items-start relative z-10 px-2 sm:px-4">
+        {/* Timer Panel - Mobile: Top, Desktop: Left Side */}
         {gameState.timer && (
-          <div className="lg:flex-shrink-0 lg:w-64">
-            <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-6 space-y-6">
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center justify-center gap-2">
-                  <Clock size={24} className="text-blue-600" />
-                  Game Timer
-                </h3>
-                <div className="text-sm text-slate-600 font-medium">
-                  {gameState.timer.mode === 'custom' 
-                    ? `${Math.floor((customTime || 15))} min` 
-                    : gameState.timer.mode === 'none' 
-                      ? 'No timer' 
-                      : gameState.timer.mode.replace('min', ' min')
-                  }
-                </div>
-              </div>
-
-              {/* Black Timer */}
-              <div className="space-y-3">
-                <div className="text-center text-sm font-medium text-slate-600">Black Player</div>
-                <TimerDisplay 
-                  time={gameState.timer.blackTime}
-                  isActive={gameState.currentPlayer === 'black' && gameState.timer.isActive && !isTimerPaused}
-                  player="black"
-                  themeId={themeId}
-                />
-              </div>
-
-              {/* Timer Controls */}
-              <div className="flex flex-col gap-3">
-                <motion.button
-                  onClick={toggleTimer}
-                  className={`
-                    flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-300
-                    ${isTimerPaused 
-                      ? 'bg-green-500 hover:bg-green-600 text-white' 
-                      : 'bg-orange-500 hover:bg-orange-600 text-white'
+          <div className="w-full xl:flex-shrink-0 xl:w-64 order-1 xl:order-1">
+            <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6">
+              {/* Mobile: Horizontal Layout, Desktop: Vertical */}
+              <div className="flex xl:flex-col gap-4 xl:gap-6">
+                {/* Timer Header - Hidden on mobile */}
+                <div className="hidden xl:block text-center">
+                  <h3 className="text-lg lg:text-xl font-bold text-slate-800 mb-2 flex items-center justify-center gap-2">
+                    <Clock size={20} className="text-blue-600 lg:w-6 lg:h-6" />
+                    <span className="text-sm lg:text-base">Game Timer</span>
+                  </h3>
+                  <div className="text-xs lg:text-sm text-slate-600 font-medium">
+                    {gameState.timer.mode === 'custom' 
+                      ? `${Math.floor((customTime || 15))} min` 
+                      : gameState.timer.mode === 'none' 
+                        ? 'No timer' 
+                        : gameState.timer.mode.replace('min', ' min')
                     }
-                  `}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  disabled={gameState.isCheckmate || gameState.isStalemate || !hasGameStarted}
-                >
-                  {isTimerPaused ? <Play size={16} /> : <Pause size={16} />}
-                  {isTimerPaused ? 'Resume' : 'Pause'}
-                </motion.button>
-                
-                {!hasGameStarted && gameState.timer.mode !== 'none' && (
-                  <div className="text-center text-sm text-slate-600 bg-yellow-100/80 rounded-lg p-3">
-                    Timer will start when White makes the first move
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* White Timer */}
-              <div className="space-y-3">
-                <div className="text-center text-sm font-medium text-slate-600">White Player</div>
-                <TimerDisplay 
-                  time={gameState.timer.whiteTime}
-                  isActive={gameState.currentPlayer === 'white' && gameState.timer.isActive && !isTimerPaused}
-                  player="white"
-                  themeId={themeId}
-                />
+                {/* Black Timer */}
+                <div className="flex-1 xl:space-y-3">
+                  <div className="text-center text-xs sm:text-sm font-medium text-slate-600 mb-2 xl:mb-0">Black Player</div>
+                  <TimerDisplay 
+                    time={gameState.timer.blackTime}
+                    isActive={gameState.currentPlayer === 'black' && gameState.timer.isActive && !isTimerPaused}
+                    player="black"
+                    themeId={themeId}
+                  />
+                </div>
+
+                {/* Timer Controls - Mobile: Center, Desktop: Below */}
+                <div className="flex xl:flex-col gap-2 xl:gap-3 items-center xl:items-stretch">
+                  <motion.button
+                    onClick={toggleTimer}
+                    className={`
+                      flex items-center justify-center gap-1 xl:gap-2 px-2 xl:px-4 py-2 xl:py-3 rounded-lg font-medium transition-all duration-300 text-xs xl:text-sm
+                      ${isTimerPaused 
+                        ? 'bg-green-500 hover:bg-green-600 text-white' 
+                        : 'bg-orange-500 hover:bg-orange-600 text-white'
+                      }
+                    `}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    disabled={gameState.isCheckmate || gameState.isStalemate || !hasGameStarted}
+                  >
+                    {isTimerPaused ? <Play size={14} className="xl:w-4 xl:h-4" /> : <Pause size={14} className="xl:w-4 xl:h-4" />}
+                    <span className="hidden sm:inline">{isTimerPaused ? 'Resume' : 'Pause'}</span>
+                  </motion.button>
+                  
+                  {!hasGameStarted && gameState.timer.mode !== 'none' && (
+                    <div className="text-center text-xs xl:text-sm text-slate-600 bg-yellow-100/80 rounded-lg p-2 xl:p-3 flex-1 xl:flex-none">
+                      <span className="hidden sm:inline">Timer will start when White makes the first move</span>
+                      <span className="sm:hidden">Timer starts with first move</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* White Timer */}
+                <div className="flex-1 xl:space-y-3">
+                  <div className="text-center text-xs sm:text-sm font-medium text-slate-600 mb-2 xl:mb-0">White Player</div>
+                  <TimerDisplay 
+                    time={gameState.timer.whiteTime}
+                    isActive={gameState.currentPlayer === 'white' && gameState.timer.isActive && !isTimerPaused}
+                    player="white"
+                    themeId={themeId}
+                  />
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Game Board */}
-        <div className="flex flex-col items-center flex-none min-w-fit">
-          <div className="mb-4 text-center min-w-max">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2 whitespace-nowrap inline-block">Chess Master</h2>
-            <div className="text-lg font-semibold text-slate-600">
+        <div className="flex flex-col items-center flex-none min-w-fit order-2 xl:order-2">
+          <div className="mb-2 sm:mb-4 text-center min-w-max">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-slate-800 mb-1 sm:mb-2 whitespace-nowrap inline-block">Chess Master</h2>
+            <div className="text-sm sm:text-base lg:text-lg font-semibold text-slate-600">
               {gameStatus}
             </div>
           </div>
 
           <div className="relative">
-            <div className={`grid grid-cols-8 gap-0 border-4 ${theme.boardBorder} rounded-xl overflow-hidden shadow-2xl ${theme.boardRing}`}>
+            <div className={`grid grid-cols-8 gap-0 border-2 sm:border-4 ${theme.boardBorder} rounded-lg sm:rounded-xl overflow-hidden shadow-xl sm:shadow-2xl ${theme.boardRing}`}>
               {Array.from({ length: 64 }, (_, i) => {
                 const x = Math.floor(i / 8);
                 const y = i % 8;
@@ -551,11 +556,11 @@ export function ChessGame({
                   <motion.div
                     key={`${x}-${y}`}
                     className={`
-                      w-16 h-16 flex items-center justify-center cursor-pointer relative
+                      w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 flex items-center justify-center cursor-pointer relative
                       ${isLight ? theme.lightSquare : theme.darkSquare}
-                      ${isSquareHighlighted(x, y) ? 'ring-4 ring-blue-500 ring-inset' : ''}
-                      ${isSquareLegalMove(x, y) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
-                      ${isSquareInCheck(x, y) ? 'ring-4 ring-red-500 ring-inset' : ''}
+                      ${isSquareHighlighted(x, y) ? 'ring-2 sm:ring-4 ring-blue-500 ring-inset' : ''}
+                      ${isSquareLegalMove(x, y) ? 'ring-1 sm:ring-2 ring-emerald-500 ring-inset' : ''}
+                      ${isSquareInCheck(x, y) ? 'ring-2 sm:ring-4 ring-red-500 ring-inset' : ''}
                       hover:brightness-110 transition-all duration-200
                       ${hoveredSquare?.x === x && hoveredSquare?.y === y ? 'bg-opacity-80' : ''}
                     `}
@@ -568,7 +573,7 @@ export function ChessGame({
                     {/* Legal move indicator */}
                     {isSquareLegalMove(x, y) && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className={`w-4 h-4 rounded-full ${piece ? 'ring-3 ring-emerald-400 ring-opacity-80' : 'bg-emerald-400/60'}`} />
+                        <div className={`w-2 h-2 sm:w-3 sm:h-3 lg:w-4 lg:h-4 rounded-full ${piece ? 'ring-1 sm:ring-2 lg:ring-3 ring-emerald-400 ring-opacity-80' : 'bg-emerald-400/60'}`} />
                       </div>
                     )}
                     
@@ -583,12 +588,12 @@ export function ChessGame({
                     
                     {/* Coordinate labels */}
                     {x === 7 && (
-                      <div className={`absolute bottom-1 right-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
+                      <div className={`absolute bottom-0.5 right-0.5 sm:bottom-1 sm:right-1 text-xs sm:text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
                         {String.fromCharCode(97 + y)}
                       </div>
                     )}
                     {y === 0 && (
-                      <div className={`absolute top-1 left-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
+                      <div className={`absolute top-0.5 left-0.5 sm:top-1 sm:left-1 text-xs sm:text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
                         {8 - x}
                       </div>
                     )}
@@ -599,9 +604,9 @@ export function ChessGame({
           </div>
         </div>
 
-        {/* Game Info Panel */}
+        {/* Game Info Panel - Mobile: Bottom, Desktop: Right Side */}
         <motion.div 
-          className={`flex-1 ${isPanelMinimized ? 'max-w-16' : 'max-w-md'} transition-all duration-300`}
+          className={`w-full xl:flex-1 ${isPanelMinimized ? 'xl:max-w-16' : 'xl:max-w-md'} transition-all duration-300 order-3 xl:order-3`}
           animate={{ 
             width: isPanelMinimized ? '4rem' : 'auto',
             maxWidth: isPanelMinimized ? '4rem' : '28rem'
@@ -610,7 +615,7 @@ export function ChessGame({
         >
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
             {/* Panel Header with Minimize Button */}
-            <div className="flex items-center justify-between p-4 bg-slate-50 border-b border-slate-200">
+            <div className="flex items-center justify-between p-2 sm:p-3 lg:p-4 bg-slate-50 border-b border-slate-200">
               {!isPanelMinimized && (
                 <motion.h3 
                   className="text-lg font-semibold text-slate-800"
