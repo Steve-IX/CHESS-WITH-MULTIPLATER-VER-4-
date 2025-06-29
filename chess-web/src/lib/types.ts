@@ -74,6 +74,6 @@ export interface ChessAI {
 }
 
 export interface NetworkMessage {
-  type: 'move' | 'gameState' | 'chat' | 'disconnect';
+  type: 'move' | 'gameState' | 'chat' | 'disconnect' | 'draw-offer' | 'draw-accept' | 'draw-decline' | 'resign' | 'game-over';
   data: any;
 } 

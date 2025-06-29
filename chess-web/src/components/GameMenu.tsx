@@ -36,7 +36,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
       setShowDifficulty(true);
     } else if (selectedMode === 'online') {
       setShowTimerSelect(false);
-      setShowRoomInput(true);
+      handleOnlineGame();
     } else {
       // Local mode
       const finalCustomTime = timer === 'custom' ? customTime : undefined;
@@ -52,15 +52,9 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
     onGameStart('computer', diff, undefined, selectedTheme, timerMode, finalCustomTime);
   };
 
-  const handleOnlineGame = (isHost: boolean) => {
+  const handleOnlineGame = () => {
     const finalCustomTime = timerMode === 'custom' ? customTime : undefined;
-    if (isHost) {
-      onGameStart('online', undefined, undefined, selectedTheme, timerMode, finalCustomTime);
-    } else {
-      if (roomId.trim()) {
-        onGameStart('online', undefined, roomId.trim(), selectedTheme, timerMode, finalCustomTime);
-      }
-    }
+    onGameStart('online', undefined, undefined, selectedTheme, timerMode, finalCustomTime);
   };
 
   const resetMenu = () => {

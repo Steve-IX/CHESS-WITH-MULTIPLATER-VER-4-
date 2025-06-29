@@ -5,8 +5,8 @@ import { ChessGame } from '@/components/ChessGame';
 import { GameMenu } from '@/components/GameMenu';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { MusicPlayer } from '@/components/MusicPlayer';
+import { OnlineChess } from '@/components/OnlineChess';
 import { GameMode, Difficulty, GameResult, ThemeId, TimerMode } from '@/lib/types';
-import { chessSocket } from '@/lib/socket';
 
 export default function Home() {
   const [currentMode, setCurrentMode] = useState<GameMode | null>(null);
@@ -18,7 +18,7 @@ export default function Home() {
   const [timerMode, setTimerMode] = useState<TimerMode>('none');
   const [customTime, setCustomTime] = useState<number>(15);
 
-  const handleGameStart = async (
+  const handleGameStart = (
     mode: GameMode, 
     diff?: Difficulty, 
     roomCode?: string, 
@@ -44,26 +44,6 @@ export default function Home() {
       setCustomTime(customTimerValue);
     }
 
-    if (mode === 'online') {
-      try {
-        await chessSocket.connect();
-        
-        if (roomCode) {
-          // Join existing room
-          await chessSocket.joinRoom(roomCode);
-          setRoomId(roomCode);
-        } else {
-          // Create new room
-          const newRoomId = await chessSocket.createRoom();
-          setRoomId(newRoomId);
-        }
-      } catch (error) {
-        console.error('Failed to setup online game:', error);
-        alert('Failed to connect to online game. Please try again.');
-        return;
-      }
-    }
-
     setGameStarted(true);
   };
 
@@ -87,10 +67,6 @@ export default function Home() {
     setRoomId(null);
     setShowThemeSelector(false);
     setTimerMode('none');
-    
-    if (chessSocket) {
-      chessSocket.disconnect();
-    }
   };
 
   const handleThemeSelect = () => {
@@ -125,6 +101,20 @@ export default function Home() {
           onGameStart={handleGameStart}
           onThemeSelect={handleThemeSelect}
           selectedTheme={selectedTheme}
+        />
+        <MusicPlayer />
+      </>
+    );
+  }
+
+  if (currentMode === 'online') {
+    return (
+      <>
+        <OnlineChess
+          onBack={handleBackToMenu}
+          selectedTheme={selectedTheme}
+          timerMode={timerMode}
+          customTime={customTime}
         />
         <MusicPlayer />
       </>
