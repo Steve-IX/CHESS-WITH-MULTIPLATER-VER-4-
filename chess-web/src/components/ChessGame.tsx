@@ -341,10 +341,10 @@ export function ChessGame({
           return; // Can't select opponent's pieces in online mode
         }
         
-        setSelectedSquare(position);
-        const moves = calculateLegalMoves(gameState, position);
-        setLegalMoves(moves);
-      }
+      setSelectedSquare(position);
+      const moves = calculateLegalMoves(gameState, position);
+      setLegalMoves(moves);
+    }
     }
   }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking]);
 
@@ -364,20 +364,20 @@ export function ChessGame({
       }
       
       setGameState(newGameState);
-      
-      // Add move notation
-      const notation = generateMoveNotation(move);
-      setMoveNotations(prev => [...prev, notation]);
-      
+    
+    // Add move notation
+    const notation = generateMoveNotation(move);
+    setMoveNotations(prev => [...prev, notation]);
+    
       // Clear selection
       setSelectedSquare(null);
       setLegalMoves([]);
-      
+    
       // Send move if online
-      if (gameMode === 'online') {
+    if (gameMode === 'online') {
         await chessSocket.sendMove(move);
-      }
-      
+    }
+
       // Check for game end
       if (newGameState.isCheckmate) {
         const winner = newGameState.currentPlayer === 'white' ? 'black' : 'white';

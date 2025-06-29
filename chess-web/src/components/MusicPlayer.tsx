@@ -136,15 +136,10 @@ export const MusicPlayer = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isUIUpdating, setIsUIUpdating] = useState(false); // Track UI state updates
   const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
-  const [isChangingTrack, setIsChangingTrack] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false); // Track if user is seeking
   const [lastSeekTime, setLastSeekTime] = useState(0); // Track last seek operation
-  const playAttemptRef = useRef<AbortController | null>(null);
-  const trackChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastTrackChangeRef = useRef<number>(0); // Debounce track changes
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -319,134 +314,76 @@ export const MusicPlayer = () => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Debounced track change to prevent rapid clicking issues
-  const debouncedTrackChange = useCallback((direction: 'next' | 'previous') => {
-    const now = Date.now();
-    const timeSinceLastChange = now - lastTrackChangeRef.current;
+  const changeTrack = useCallback((direction: 'next' | 'previous') => {
+    console.log(`Changing track ${direction}`);
     
-    // Prevent rapid track changes (minimum 300ms between changes)
-    if (timeSinceLastChange < 300) {
-      console.log('Track change debounced - too rapid');
-      return;
+    if (direction === 'next') {
+      setCurrentTrackIndex((prevIndex) => {
+        const nextIndex = prevIndex + 1;
+        return nextIndex >= playlist.length ? 0 : nextIndex;
+      });
+    } else {
+      setCurrentTrackIndex((prevIndex) => {
+        const newIndex = prevIndex - 1;
+        return newIndex < 0 ? playlist.length - 1 : newIndex;
+      });
     }
-    
-    // If currently seeking, wait for seek to complete
-    if (isSeeking) {
-      console.log('Track change blocked - seeking in progress');
-      return;
-    }
-    
-    // If already changing tracks, ignore
-    if (isChangingTrack) {
-      console.log('Track change blocked - already changing');
-      return;
-    }
-
-    lastTrackChangeRef.current = now;
-    
-    // Clear any existing timeout
-    if (trackChangeTimeoutRef.current) {
-      clearTimeout(trackChangeTimeoutRef.current);
-    }
-    
-    // Set timeout to allow current operations to complete
-    trackChangeTimeoutRef.current = setTimeout(() => {
-      try {
-        setIsChangingTrack(true);
-        stopVisualizer();
-        setError(null);
-        
-        if (direction === 'next') {
-          setCurrentTrackIndex((prevIndex) => {
-            const nextIndex = prevIndex + 1;
-            return nextIndex >= playlist.length ? 0 : nextIndex;
-          });
-        } else {
-          setCurrentTrackIndex((prevIndex) => {
-            const prevTrackIndex = prevIndex - 1;
-            return prevTrackIndex < 0 ? playlist.length - 1 : prevTrackIndex;
-          });
-        }
-      } catch (error) {
-        console.error(`Error changing to ${direction} track:`, error);
-        setError('Failed to change track');
-        setIsChangingTrack(false);
-      }
-    }, 50); // Small delay to allow current operations to complete
-  }, [isChangingTrack, isSeeking, playlist.length]);
+  }, [playlist.length]);
 
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  // Track change effect
+  // Track change effect - handles auto-play continuation
   useEffect(() => {
-    const setupNewTrack = async () => {
-      if (!audioRef.current) return;
-
-      // Always set the audio element's volume to the current state
-      audioRef.current.volume = volume;
-
-      // Cancel any pending play attempts
-      if (playAttemptRef.current) {
-        playAttemptRef.current.abort();
-      }
-      playAttemptRef.current = new AbortController();
-      const { signal } = playAttemptRef.current;
-
-      try {
-        setIsChangingTrack(true);
-        setIsSeeking(false); // Reset seeking state when changing tracks
-        // Reset connection state to force new setup
-        isConnectedRef.current = false;
-        
-        // Stop current visualizer
-        stopVisualizer();
-        
-        // Reset audio element safely
+    // Reset basic states for new track
+    setCurrentTime(0);
+    setDuration(0);
+    setError(null);
+    setIsSeeking(false);
+    
+    // Reset connection state for new audio setup
+    isConnectedRef.current = false;
+    stopVisualizer();
+    
+    // If was playing, continue playing the new track
+    if (isPlaying && hasUserInteracted && audioRef.current) {
+      const playNewTrack = async () => {
         try {
-          audioRef.current.currentTime = 0;
-        } catch (error) {
-          // Ignore errors when resetting currentTime on unloaded audio
-          console.log('Audio not ready for currentTime reset, continuing...');
-        }
-        
-        // Only auto-play if user has interacted and music was playing
-        if (isPlaying && hasUserInteracted) {
-          try {
-            // Small delay to ensure proper cleanup between tracks
-            await new Promise(resolve => setTimeout(resolve, 50));
-            if (signal.aborted) return;
-
-            // This will trigger handlePlay which sets up the new context
-            await audioRef.current.play();
-          } catch (error: unknown) {
-            if (error instanceof Error && error.name !== 'AbortError') {
-              console.error('Error auto-playing new track:', error);
-              setIsPlaying(false);
+          // Small delay to ensure audio element is ready with new source
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          if (audioRef.current) {
+            // Set volume
+            audioRef.current.volume = isMuted ? 0 : volume;
+            
+            // Wait for canplay if needed
+            if (audioRef.current.readyState < 2) {
+              await new Promise((resolve) => {
+                const onCanPlay = () => {
+                  if (audioRef.current) {
+                    audioRef.current.removeEventListener('canplay', onCanPlay);
+                  }
+                  resolve(undefined);
+                };
+                if (audioRef.current) {
+                  audioRef.current.addEventListener('canplay', onCanPlay);
+                }
+              });
             }
+            
+            // Play the new track
+            await audioRef.current.play();
+            console.log('🎵 Auto-play successful for new track');
+            
           }
-        } else if (isPlaying && !hasUserInteracted) {
-          // If isPlaying is true but user hasn't interacted, reset the state
+        } catch (error) {
+          console.error('Error auto-playing new track:', error);
           setIsPlaying(false);
+          setError('Failed to auto-play new track');
         }
-      } finally {
-        setIsChangingTrack(false);
-      }
-    };
-
-    setupNewTrack();
-
-    return () => {
-      if (playAttemptRef.current) {
-        playAttemptRef.current.abort();
-      }
-      // Clean up timeouts
-      if (trackChangeTimeoutRef.current) {
-        clearTimeout(trackChangeTimeoutRef.current);
-      }
-      if (seekTimeoutRef.current) {
-        clearTimeout(seekTimeoutRef.current);
-      }
-    };
+      };
+      
+      playNewTrack();
+    }
   }, [currentTrackIndex]);
 
   // Audio event handlers
@@ -508,18 +445,24 @@ export const MusicPlayer = () => {
     };
 
     const handleEnded = () => {
+      console.log('Track ended:', currentTrack.title);
       stopVisualizer();
+      setIsPlaying(false);
+      
+      // Auto-play next track if enabled and user has interacted
       if (autoPlayEnabled && hasUserInteracted) {
-        // Use a timeout to prevent conflicts with rapid user interactions
+        console.log('Auto-play enabled, moving to next track...');
         setTimeout(() => {
-          if (!isChangingTrack && !isSeeking) {
-            nextTrack();
-            // Ensure isPlaying stays true for autoplay only if user has interacted
-            setIsPlaying(true);
-          }
-        }, 100);
-      } else {
-        setIsPlaying(false);
+          const nextIndex = (currentTrackIndex + 1) >= playlist.length ? 0 : currentTrackIndex + 1;
+          console.log(`🎵 Auto-advancing to track ${nextIndex + 1}: ${playlist[nextIndex].title}`);
+          
+          // Set the next track
+          setCurrentTrackIndex(nextIndex);
+          
+          // Set playing state for auto-play continuation
+          setIsPlaying(true);
+          
+        }, 300); // Small delay for smooth transition
       }
     };
 
@@ -576,115 +519,44 @@ export const MusicPlayer = () => {
   // Cleanup timeouts on component unmount
   useEffect(() => {
     return () => {
-      if (trackChangeTimeoutRef.current) {
-        clearTimeout(trackChangeTimeoutRef.current);
-      }
       if (seekTimeoutRef.current) {
         clearTimeout(seekTimeoutRef.current);
       }
     };
   }, []);
 
-  // Synchronize UI state with audio element state
-  const syncPlayerState = useCallback(() => {
-    if (!audioRef.current) return;
-    
-    try {
-      const actuallyPlaying = !audioRef.current.paused && !audioRef.current.ended;
-      const currentVolume = audioRef.current.volume;
-      const currentMuted = audioRef.current.muted;
-      
-      // Sync playing state
-      if (actuallyPlaying !== isPlaying) {
-        console.log(`Syncing isPlaying: ${isPlaying} -> ${actuallyPlaying}`);
-        setIsPlaying(actuallyPlaying);
-        
-        if (actuallyPlaying && !isConnectedRef.current) {
-          // If audio is playing but visualizer isn't connected, reconnect
-          initializeAudioContext().then(() => {
-            startVisualizer();
-          });
-        } else if (actuallyPlaying) {
-          startVisualizer();
-        } else {
-          stopVisualizer();
-        }
-      }
-      
-      // Sync volume state
-      if (Math.abs(currentVolume - (isMuted ? 0 : volume)) > 0.01) {
-        if (currentVolume === 0 && !isMuted) {
-          setIsMuted(true);
-        } else if (currentVolume > 0 && isMuted) {
-          setIsMuted(false);
-          setVolume(currentVolume);
-        }
-      }
-      
-      // Clear any stale errors if playback is working
-      if (actuallyPlaying && error) {
-        setError(null);
-      }
-      
-    } catch (syncError) {
-      console.error('Error syncing player state:', syncError);
-    }
-  }, [isPlaying, volume, isMuted, error]);
-
-  // Sync state when minimizing/maximizing
+  // Simple minimize toggle
   const handleMinimizeToggle = useCallback((minimize: boolean) => {
-    try {
-      setIsMinimized(minimize);
-      
-      // Small delay to allow animation to start, then sync state
-      setTimeout(() => {
-        syncPlayerState();
-      }, 100);
-      
-    } catch (error) {
-      console.error('Error toggling minimize state:', error);
-    }
-  }, [syncPlayerState]);
-
-  // Periodic state synchronization to catch any desync issues
-  useEffect(() => {
-    const syncInterval = setInterval(() => {
-      // Only sync if not currently in an operation
-      if (!isChangingTrack && !isUIUpdating && !isSeeking) {
-        syncPlayerState();
-      }
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(syncInterval);
-  }, [isChangingTrack, isUIUpdating, isSeeking, syncPlayerState]);
+    setIsMinimized(minimize);
+  }, []);
 
   const nextTrack = () => {
-    debouncedTrackChange('next');
+    changeTrack('next');
   };
 
   const previousTrack = () => {
-    debouncedTrackChange('previous');
+    changeTrack('previous');
   };
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !duration || isChangingTrack) return;
+    if (!audioRef.current || !duration) return;
     
     try {
       setIsSeeking(true); // Mark that we're seeking
-      
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
       const percentage = Math.max(0, Math.min(1, clickX / rect.width)); // Clamp between 0 and 1
-      const newTime = percentage * duration;
-      
+    const newTime = percentage * duration;
+    
       // Clear any existing seek timeout
       if (seekTimeoutRef.current) {
         clearTimeout(seekTimeoutRef.current);
       }
       
       // Update audio currentTime
-      audioRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
       setLastSeekTime(newTime);
       
       // Clear seeking state after a short delay
@@ -726,83 +598,33 @@ export const MusicPlayer = () => {
   };
 
   const togglePlay = async () => {
-    // Prevent multiple simultaneous toggle operations
-    if (isChangingTrack || isUIUpdating) {
-      console.log('Toggle play blocked - operation in progress');
+    if (!audioRef.current) {
+      setError('Audio not ready');
       return;
     }
 
     try {
-      setIsUIUpdating(true);
-      
-      // Ensure audio element is available
-      if (!audioRef.current) {
-        console.error('Audio element not available');
-        setError('Audio not ready');
-        return;
-      }
-
-      // Sync state with actual audio element
-      const actuallyPlaying = !audioRef.current.paused && !audioRef.current.ended;
-      
-      if (!actuallyPlaying && !isPlaying) {
-        // Both states agree - we should play
+      if (isPlaying) {
+        // Currently playing - pause
+        audioRef.current.pause();
+        setIsPlaying(false);
+        console.log('Playback paused');
+      } else {
+        // Currently paused - play
         setHasUserInteracted(true);
         await initializeAudioContext();
         
-        // Set state optimistically but verify
         setIsPlaying(true);
-        
-        try {
-          await audioRef.current.play();
-          console.log('Playback started successfully');
-        } catch (playError) {
-          console.error('Failed to start playback:', playError);
-          setIsPlaying(false);
-          setError('Failed to start playback');
-        }
-        
-      } else if (actuallyPlaying || isPlaying) {
-        // Either state says we're playing - pause
-        setIsPlaying(false);
-        
-        try {
-          audioRef.current.pause();
-          console.log('Playback paused successfully');
-        } catch (pauseError) {
-          console.error('Failed to pause playback:', pauseError);
-          setError('Failed to pause playback');
-        }
-      } else {
-        // States are out of sync - force sync
-        console.log('States out of sync, forcing synchronization');
-        const shouldPlay = actuallyPlaying;
-        setIsPlaying(shouldPlay);
-        
-        if (shouldPlay) {
-          startVisualizer();
-        } else {
-          stopVisualizer();
-        }
+        await audioRef.current.play();
+        console.log('Playback started');
       }
+      
+      setError(null);
       
     } catch (error) {
       console.error('Error toggling playback:', error);
+      setIsPlaying(false);
       setError('Failed to toggle playback');
-      
-      // Force sync with audio element state
-      if (audioRef.current) {
-        const actuallyPlaying = !audioRef.current.paused && !audioRef.current.ended;
-        setIsPlaying(actuallyPlaying);
-        
-        if (actuallyPlaying) {
-          startVisualizer();
-        } else {
-          stopVisualizer();
-        }
-      }
-    } finally {
-      setIsUIUpdating(false);
     }
   };
 
@@ -868,7 +690,7 @@ export const MusicPlayer = () => {
                       </motion.div>
                       <div>
                         <div className={`${getContrastTextColor()} font-semibold text-sm`}>
-                          {error ? 'Error' : isUIUpdating ? 'Updating...' : isPlaying ? 'Now Playing' : 'Paused'}
+                          {error ? 'Error' : isPlaying ? 'Now Playing' : 'Paused'}
                         </div>
                         <div className={`${getSecondaryTextColor()} text-xs`}>
                           {currentTrackIndex + 1}/{playlist.length} • Music Player
@@ -1011,14 +833,13 @@ export const MusicPlayer = () => {
 
                       <motion.button
                         onClick={togglePlay}
-                        disabled={isUIUpdating || isChangingTrack}
-                        className="p-3 rounded-xl transition-all duration-300 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-3 rounded-xl transition-all duration-300 text-white"
                         style={{ 
                           background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
                           boxShadow: `0 4px 15px ${colors.primary}40`
                         }}
-                        whileHover={{ scale: isUIUpdating || isChangingTrack ? 1 : 1.05, boxShadow: `0 6px 20px ${colors.primary}60` }}
-                        whileTap={{ scale: isUIUpdating || isChangingTrack ? 1 : 0.95 }}
+                        whileHover={{ scale: 1.05, boxShadow: `0 6px 20px ${colors.primary}60` }}
+                        whileTap={{ scale: 0.95 }}
                       >
                         {isPlaying ? (
                           <Pause size={20} />
@@ -1106,14 +927,13 @@ export const MusicPlayer = () => {
                   </motion.button>
                   <motion.button
                     onClick={togglePlay}
-                    disabled={isUIUpdating || isChangingTrack}
-                    className="p-3 rounded-xl transition-all duration-300 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-3 rounded-xl transition-all duration-300 text-white"
                     style={{ 
                       background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
                       boxShadow: `0 4px 15px ${colors.primary}40`
                     }}
-                    whileHover={{ scale: isUIUpdating || isChangingTrack ? 1 : 1.05 }}
-                    whileTap={{ scale: isUIUpdating || isChangingTrack ? 1 : 0.95 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     {isPlaying ? (
                       <Pause size={16} />
