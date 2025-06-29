@@ -20,18 +20,21 @@ export class ChessSocket {
   private callbacks: Map<string, Function[]> = new Map();
 
   constructor() {
-    // Initialize socket connection - use the API route for production
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? window.location.origin 
-      : 'http://localhost:3000';
-    
-    this.socket = io(socketUrl, {
-      path: '/api/socket',
-      autoConnect: false,
-      transports: ['websocket', 'polling']
-    });
+    // Only initialize socket on client side
+    if (typeof window !== 'undefined') {
+      // Initialize socket connection - use the API route for production
+      const socketUrl = process.env.NODE_ENV === 'production' 
+        ? window.location.origin 
+        : 'http://localhost:3000';
+      
+      this.socket = io(socketUrl, {
+        path: '/api/socket',
+        autoConnect: false,
+        transports: ['websocket', 'polling']
+      });
 
-    this.setupEventListeners();
+      this.setupEventListeners();
+    }
   }
 
   private setupEventListeners(): void {
@@ -88,7 +91,7 @@ export class ChessSocket {
       this.emitCallback('move-made', data);
     });
 
-    this.socket.on('game-over', (data: { reason: string, winner?: PlayerColor }) => {
+    this.socket.on('game-over', (data: { reason: string, winner?: PlayerColor | 'draw' }) => {
       console.log('🏁 Game over:', data);
       this.emitCallback('game-over', data);
     });
@@ -335,7 +338,7 @@ export class ChessSocket {
     return () => this.removeCallback('move-made', callback);
   }
 
-  onGameOver(callback: (data: { reason: string, winner?: PlayerColor }) => void): () => void {
+  onGameOver(callback: (data: { reason: string, winner?: PlayerColor | 'draw' }) => void): () => void {
     this.addCallback('game-over', callback);
     return () => this.removeCallback('game-over', callback);
   }

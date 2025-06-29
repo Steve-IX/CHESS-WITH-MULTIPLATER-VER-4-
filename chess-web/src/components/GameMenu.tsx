@@ -15,9 +15,9 @@ interface GameMenuProps {
 export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenuProps) {
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [roomId, setRoomId] = useState('');
+
   const [showDifficulty, setShowDifficulty] = useState(false);
-  const [showRoomInput, setShowRoomInput] = useState(false);
+
   const [showTimerSelect, setShowTimerSelect] = useState(false);
   const [timerMode, setTimerMode] = useState<TimerMode>('none');
   const [customTime, setCustomTime] = useState<number>(15);
@@ -60,9 +60,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
   const resetMenu = () => {
     setSelectedMode(null);
     setShowDifficulty(false);
-    setShowRoomInput(false);
     setShowTimerSelect(false);
-    setRoomId('');
     setTimerMode('none');
   };
 
@@ -542,7 +540,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
             )}
       
       {/* Main Menu Card */}
-            {!showTimerSelect && !showDifficulty && !showRoomInput && (
+            {!showTimerSelect && !showDifficulty && (
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 50 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -672,65 +670,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           </motion.div>
         )}
 
-        {showRoomInput && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-                className={`${
-                  theme === 'dark' 
-                    ? 'bg-white/10 border-white/30 text-white' 
-                    : 'bg-white/80 border-gray-300/50 text-gray-800'
-                } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 max-w-md w-full`}
-              >
-                <h3 className={`text-2xl font-semibold text-center mb-6 ${
-                  theme === 'dark' ? 'text-white' : 'text-gray-800'
-                }`}>
-              Online Multiplayer
-            </h3>
-            
-                <div className="space-y-4">
-            <button
-              onClick={() => handleOnlineGame(true)}
-              className="w-full p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold"
-            >
-              🏠 Host a Game
-            </button>
-            
-                  <div className={`text-center ${theme === 'dark' ? 'text-white/50' : 'text-gray-500'}`}>or</div>
-            
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Enter room code"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                      className={`w-full p-3 ${
-                        theme === 'dark' 
-                          ? 'bg-white/10 border-white/20 text-white placeholder-white/50' 
-                          : 'bg-white/60 border-gray-300 text-gray-800 placeholder-gray-500'
-                      } border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                maxLength={6}
-              />
-              <button
-                onClick={() => handleOnlineGame(false)}
-                disabled={!roomId.trim()}
-                className="w-full p-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-xl transition-colors font-semibold"
-              >
-                🚪 Join Game
-              </button>
-            </div>
-            
-            <button
-              onClick={resetMenu}
-                    className={`w-full py-2 ${
-                      theme === 'dark' ? 'text-white/70 hover:text-white' : 'text-gray-600 hover:text-gray-800'
-                    } transition-colors`}
-            >
-              ← Back
-            </button>
-                </div>
-          </motion.div>
-        )}
+
           </AnimatePresence>
         </div>
       </div>

@@ -305,7 +305,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         io.to(roomId).emit('game-over', {
           reason: 'draw',
-          winner: 'draw'
+          winner: undefined
         });
         
         room.isGameStarted = false;

@@ -35,11 +35,11 @@ export function useMultiplayer() {
     }
 
     try {
-      const newRoomId = await chessSocket.createRoom();
-      setRoomId(newRoomId);
+      const roomData = await chessSocket.createRoom();
+      setRoomId(roomData.roomId);
       setIsHost(true);
       setIsWaitingForOpponent(true);
-      return newRoomId;
+      return roomData.roomId;
     } catch (error) {
       console.error('Failed to create room:', error);
       throw error;
@@ -52,8 +52,8 @@ export function useMultiplayer() {
     }
 
     try {
-      await chessSocket.joinRoom(roomCode);
-      setRoomId(roomCode);
+      const roomData = await chessSocket.joinRoom(roomCode);
+      setRoomId(roomData.roomId);
       setIsHost(false);
       setOpponentConnected(true);
     } catch (error) {
@@ -64,12 +64,12 @@ export function useMultiplayer() {
 
   const sendMove = useCallback((move: Move) => {
     if (roomId) {
-      chessSocket.sendMove(move);
+      chessSocket.makeMove(move);
     }
   }, [roomId]);
 
-  const onMoveReceived = useCallback((callback: (move: Move) => void) => {
-    chessSocket.onMove(callback);
+  const onMoveReceived = useCallback((callback: (data: { move: Move, gameState: GameState }) => void) => {
+    chessSocket.onMoveMade(callback);
   }, []);
 
   const disconnect = useCallback(() => {

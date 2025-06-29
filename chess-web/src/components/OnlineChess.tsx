@@ -48,6 +48,9 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
 
   // Initialize socket connection
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+    
     const initializeConnection = async () => {
       try {
         setConnectionStatus('connecting');
@@ -121,7 +124,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
 
       chessSocket.onGameOver((data) => {
         let message = '';
-        if (data.winner === 'draw') {
+        if (!data.winner || data.winner === 'draw') {
           message = `Game ended in a ${data.reason}!`;
         } else {
           message = `${data.winner === playerColor ? 'You' : 'Opponent'} won by ${data.reason}!`;
@@ -152,7 +155,9 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
-      chessSocket.disconnect();
+      if (typeof window !== 'undefined') {
+        chessSocket.disconnect();
+      }
     };
   }, []);
 
@@ -168,6 +173,8 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   };
 
   const handleCreateRoom = async () => {
+    if (typeof window === 'undefined') return;
+    
     try {
       setError(null);
       await chessSocket.createRoom();
@@ -177,6 +184,8 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   };
 
   const handleJoinRoom = async () => {
+    if (typeof window === 'undefined') return;
+    
     if (!joinRoomId.trim()) {
       setError('Please enter a room ID');
       return;
@@ -191,6 +200,8 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   };
 
   const handleMove = useCallback((move: Move) => {
+    if (typeof window === 'undefined') return;
+    
     if (playerColor && gameState?.currentPlayer === playerColor) {
       chessSocket.makeMove(move);
     }
@@ -201,6 +212,8 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   }, []);
 
   const handleSendMessage = () => {
+    if (typeof window === 'undefined') return;
+    
     if (chatInput.trim()) {
       chessSocket.sendChatMessage(chatInput.trim());
       setChatInput('');
@@ -208,11 +221,15 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   };
 
   const handleResign = () => {
+    if (typeof window === 'undefined') return;
+    
     chessSocket.resign();
     setShowGameMenu(false);
   };
 
   const handleOfferDraw = () => {
+    if (typeof window === 'undefined') return;
+    
     chessSocket.offerDraw();
     setShowGameMenu(false);
   };
