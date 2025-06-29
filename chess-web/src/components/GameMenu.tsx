@@ -103,7 +103,15 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
           : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
       }`}>
-        {/* Enhanced Floating Chess Pieces */}
+        {/* Animated Grid Pattern */}
+        <div className={`absolute inset-0 opacity-10 ${
+          theme === 'dark' ? 'bg-white' : 'bg-gray-800'
+        }`} style={{
+          backgroundImage: `linear-gradient(${theme === 'dark' ? '#ffffff' : '#1f2937'} 1px, transparent 1px), linear-gradient(90deg, ${theme === 'dark' ? '#ffffff' : '#1f2937'} 1px, transparent 1px)`,
+          backgroundSize: '60px 60px',
+        }} />
+
+        {/* Large Background Chess Pieces */}
         <motion.div
           className={`absolute top-1/6 left-1/6 text-8xl font-bold ${
             theme === 'dark' ? 'text-white/30' : 'text-gray-800/40'
@@ -159,6 +167,257 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         >
           ♜
         </motion.div>
+
+        {/* Additional Floating Chess Pieces - More Dynamic */}
+        <motion.div
+          className={`absolute top-1/4 right-1/3 text-5xl font-bold ${
+            theme === 'dark' ? 'text-green-300/35' : 'text-green-600/45'
+          } filter drop-shadow-lg`}
+          animate={{
+            rotate: [0, -180, 0],
+            y: [0, 25, 0],
+            x: [0, -15, 0],
+            scale: [1, 0.8, 1],
+          }}
+          transition={{
+            duration: 16,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2
+          }}
+        >
+          ♞
+        </motion.div>
+
+        <motion.div
+          className={`absolute bottom-1/4 right-1/6 text-6xl font-bold ${
+            theme === 'dark' ? 'text-yellow-300/40' : 'text-yellow-600/50'
+          } filter drop-shadow-xl`}
+          animate={{
+            rotate: [0, 270, 0],
+            x: [0, 30, 0],
+            y: [0, -20, 0],
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 4
+          }}
+        >
+          ♗
+        </motion.div>
+
+        <motion.div
+          className={`absolute top-1/2 left-1/12 text-5xl font-bold ${
+            theme === 'dark' ? 'text-red-300/35' : 'text-red-600/45'
+          } filter drop-shadow-lg`}
+          animate={{
+            rotate: [0, 90, 180, 270, 360],
+            y: [0, -10, 0, 10, 0],
+            scale: [1, 1.2, 1, 0.9, 1],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1.5
+          }}
+        >
+          ♟
+        </motion.div>
+
+        <motion.div
+          className={`absolute top-3/4 left-1/3 text-7xl font-bold ${
+            theme === 'dark' ? 'text-cyan-300/40' : 'text-cyan-600/50'
+          } filter drop-shadow-xl`}
+          animate={{
+            rotate: [0, -90, -180, -270, -360],
+            x: [0, 20, 0, -20, 0],
+            y: [0, 15, 0],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 3.5
+          }}
+        >
+          ♙
+        </motion.div>
+
+        {/* Smaller Floating Pieces */}
+        <motion.div
+          className={`absolute top-1/5 right-1/8 text-4xl font-bold ${
+            theme === 'dark' ? 'text-pink-300/30' : 'text-pink-600/40'
+          } filter drop-shadow-md`}
+          animate={{
+            rotate: [0, 180, 360],
+            y: [0, -20, 0],
+            x: [0, 10, 0],
+            scale: [0.8, 1.1, 0.8],
+          }}
+          transition={{
+            duration: 13,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 5
+          }}
+        >
+          ♜
+        </motion.div>
+
+        <motion.div
+          className={`absolute bottom-1/5 left-1/4 text-4xl font-bold ${
+            theme === 'dark' ? 'text-orange-300/30' : 'text-orange-600/40'
+          } filter drop-shadow-md`}
+          animate={{
+            rotate: [0, -120, -240, -360],
+            x: [0, -15, 0],
+            y: [0, 12, 0],
+          }}
+          transition={{
+            duration: 17,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2.5
+          }}
+        >
+          ♞
+        </motion.div>
+
+        <motion.div
+          className={`absolute top-2/3 right-1/4 text-4xl font-bold ${
+            theme === 'dark' ? 'text-indigo-300/30' : 'text-indigo-600/40'
+          } filter drop-shadow-md`}
+          animate={{
+            rotate: [0, 45, 90, 135, 180],
+            scale: [1, 0.7, 1, 1.3, 1],
+            y: [0, -8, 0],
+          }}
+          transition={{
+            duration: 19,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 4.5
+          }}
+        >
+          ♗
+        </motion.div>
+
+        {/* Tiny Floating Pieces for Atmosphere */}
+        <motion.div
+          className={`absolute top-1/8 left-1/2 text-3xl font-bold ${
+            theme === 'dark' ? 'text-white/20' : 'text-gray-800/30'
+          } filter drop-shadow-sm`}
+          animate={{
+            rotate: [0, 360],
+            y: [0, -15, 0],
+            x: [0, 8, 0],
+            opacity: [0.2, 0.4, 0.2],
+          }}
+          transition={{
+            duration: 11,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 6
+          }}
+        >
+          ♟
+        </motion.div>
+
+        <motion.div
+          className={`absolute bottom-1/8 right-1/2 text-3xl font-bold ${
+            theme === 'dark' ? 'text-white/20' : 'text-gray-800/30'
+          } filter drop-shadow-sm`}
+          animate={{
+            rotate: [0, -360],
+            x: [0, -12, 0],
+            y: [0, 8, 0],
+            opacity: [0.2, 0.4, 0.2],
+          }}
+          transition={{
+            duration: 14,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 7
+          }}
+        >
+          ♙
+        </motion.div>
+
+        <motion.div
+          className={`absolute top-1/2 right-1/12 text-3xl font-bold ${
+            theme === 'dark' ? 'text-white/20' : 'text-gray-800/30'
+          } filter drop-shadow-sm`}
+          animate={{
+            rotate: [0, 180, 0],
+            scale: [0.8, 1.2, 0.8],
+            y: [0, -10, 0],
+            opacity: [0.2, 0.3, 0.2],
+          }}
+          transition={{
+            duration: 16,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 8
+          }}
+        >
+          ♔
+        </motion.div>
+
+        {/* Floating Orbs for Enhanced Atmosphere */}
+        <motion.div
+          className="absolute top-1/4 left-1/5 w-32 h-32 rounded-full opacity-20"
+          style={{
+            background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(147, 51, 234, 0.3)' : 'rgba(147, 51, 234, 0.2)'} 0%, transparent 70%)`
+          }}
+          animate={{
+            scale: [1, 1.2, 1],
+            x: [0, 20, 0],
+            y: [0, -15, 0],
+          }}
+          transition={{
+            duration: 12,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+
+        <motion.div
+          className="absolute bottom-1/4 right-1/5 w-24 h-24 rounded-full opacity-20"
+          style={{
+            background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(79, 70, 229, 0.3)' : 'rgba(79, 70, 229, 0.2)'} 0%, transparent 70%)`
+          }}
+          animate={{
+            scale: [1, 0.8, 1],
+            x: [0, -25, 0],
+            y: [0, 10, 0],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2
+          }}
+        />
+
+        <motion.div
+          className="absolute top-1/2 left-1/3 w-20 h-20 rounded-full opacity-15"
+          style={{
+            background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(236, 72, 153, 0.3)' : 'rgba(236, 72, 153, 0.2)'} 0%, transparent 70%)`
+          }}
+          animate={{
+            scale: [1, 1.3, 1],
+            rotate: [0, 180, 360],
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 4
+          }}
+        />
       </div>
 
       {/* Content */}
