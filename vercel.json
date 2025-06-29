@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "projectSettings": {
-    "framework": "nextjs",
-    "buildCommand": "cd chess-web && npm install && npm run build",
-    "outputDirectory": "chess-web/.next",
-    "devCommand": "cd chess-web && npm run dev"
-  }
+  "builds": [
+    {
+      "src": "chess-web/package.json",
+      "use": "@vercel/next"
+    }
+  ]
 } 
