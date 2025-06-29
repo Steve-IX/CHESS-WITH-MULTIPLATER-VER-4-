@@ -33,7 +33,7 @@ export class ChessSocket {
         this.socket.on('connect_error', (error) => {
           console.error('Socket connection error:', error);
           // Fallback to polling if WebSocket fails
-          if (this.socket?.io?.opts?.transports?.includes('websocket')) {
+          if (this.socket) {
             console.log('Falling back to polling transport');
             this.socket.io.opts.transports = ['polling', 'websocket'];
           }
