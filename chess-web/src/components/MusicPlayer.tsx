@@ -341,20 +341,20 @@ export const MusicPlayer = () => {
     setIsSeeking(false);
     
     // Reset connection state for new audio setup
-        isConnectedRef.current = false;
-        stopVisualizer();
-        
+    isConnectedRef.current = false;
+    stopVisualizer();
+    
     // If was playing, continue playing the new track
     if (isPlaying && hasUserInteracted && audioRef.current) {
       const playNewTrack = async () => {
-          try {
+        try {
           // Small delay to ensure audio element is ready with new source
           await new Promise(resolve => setTimeout(resolve, 100));
           
           if (audioRef.current) {
             // Set volume
             audioRef.current.volume = isMuted ? 0 : volume;
-
+            
             // Wait for canplay if needed
             if (audioRef.current.readyState < 2) {
               await new Promise((resolve) => {
@@ -376,14 +376,14 @@ export const MusicPlayer = () => {
             
           }
         } catch (error) {
-              console.error('Error auto-playing new track:', error);
-              setIsPlaying(false);
+          console.error('Error auto-playing new track:', error);
+          setIsPlaying(false);
           setError('Failed to auto-play new track');
         }
       };
       
       playNewTrack();
-      }
+    }
   }, [currentTrackIndex]);
 
   // Audio event handlers
@@ -447,7 +447,7 @@ export const MusicPlayer = () => {
     const handleEnded = () => {
       console.log('Track ended:', currentTrack.title);
       stopVisualizer();
-        setIsPlaying(false);
+      setIsPlaying(false);
       
       // Auto-play next track if enabled and user has interacted
       if (autoPlayEnabled && hasUserInteracted) {
