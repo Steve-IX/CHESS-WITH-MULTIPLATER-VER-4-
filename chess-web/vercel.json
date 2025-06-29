@@ -1,6 +1,12 @@
 {
-  "buildCommand": "next build",
-  "devCommand": "next dev",
-  "installCommand": "npm install",
-  "outputDirectory": ".next"
+  "version": 2,
+  "buildCommand": "cd chess-web && npm install && npm run build",
+  "outputDirectory": "chess-web/.next",
+  "devCommand": "cd chess-web && npm run dev",
+  "rewrites": [
+    {
+      "source": "/api/socket/(.*)",
+      "destination": "/api/socket"
+    }
+  ]
 } 
