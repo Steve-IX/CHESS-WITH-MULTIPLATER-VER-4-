@@ -73,11 +73,11 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-2 sm:p-4">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
       {/* Theme Toggle Button */}
       <motion.button
         onClick={toggleTheme}
-        className="fixed top-2 right-2 sm:top-4 sm:right-4 z-50 p-2 sm:p-3 bg-white/10 backdrop-blur-xl border border-white/30 rounded-full hover:bg-white/20 transition-all duration-300"
+        className="fixed top-4 right-4 z-50 p-3 bg-white/10 backdrop-blur-xl border border-white/30 rounded-full hover:bg-white/20 transition-all duration-300"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         initial={{ opacity: 0, y: -20 }}
@@ -90,9 +90,9 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           transition={{ duration: 0.5, ease: "easeInOut" }}
         >
           {theme === 'dark' ? (
-            <Sun size={20} className="text-yellow-400 sm:w-6 sm:h-6" />
+            <Sun size={24} className="text-yellow-400" />
           ) : (
-            <Moon size={20} className="text-blue-400 sm:w-6 sm:h-6" />
+            <Moon size={24} className="text-blue-400" />
           )}
         </motion.div>
       </motion.button>
@@ -103,15 +103,15 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
           : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
       }`}>
-        {/* Enhanced Floating Chess Pieces - Mobile Responsive */}
+        {/* Enhanced Floating Chess Pieces */}
         <motion.div
-          className={`absolute top-1/6 left-1/6 text-4xl sm:text-6xl lg:text-8xl font-bold ${
+          className={`absolute top-1/6 left-1/6 text-8xl font-bold ${
             theme === 'dark' ? 'text-white/30' : 'text-gray-800/40'
           } filter drop-shadow-2xl`}
           animate={{
             rotate: [0, 360],
-            y: [0, -20, 0],
-            x: [0, 15, 0],
+            y: [0, -30, 0],
+            x: [0, 20, 0],
           }}
           transition={{
             duration: 12,
@@ -123,12 +123,12 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         </motion.div>
         
         <motion.div
-          className={`absolute top-1/3 right-1/5 text-3xl sm:text-5xl lg:text-7xl font-bold ${
+          className={`absolute top-1/3 right-1/5 text-7xl font-bold ${
             theme === 'dark' ? 'text-purple-300/40' : 'text-purple-600/50'
           } filter drop-shadow-xl`}
           animate={{
             rotate: [0, -360],
-            x: [0, 20, 0],
+            x: [0, 25, 0],
             scale: [1, 1.1, 1],
           }}
           transition={{
@@ -142,13 +142,13 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         </motion.div>
         
         <motion.div
-          className={`absolute bottom-1/3 left-1/8 text-3xl sm:text-4xl lg:text-6xl font-bold ${
+          className={`absolute bottom-1/3 left-1/8 text-6xl font-bold ${
             theme === 'dark' ? 'text-blue-300/35' : 'text-blue-600/45'
           } filter drop-shadow-lg`}
           animate={{
             rotate: [0, 180, 360],
-            y: [0, 10, 0],
-            x: [0, -8, 0],
+            y: [0, 15, 0],
+            x: [0, -10, 0],
           }}
           transition={{
             duration: 14,
@@ -162,8 +162,8 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
       </div>
 
       {/* Content */}
-      <div className="relative z-10 w-full flex items-center justify-center min-h-[calc(100vh-1rem)] sm:min-h-[calc(100vh-2rem)]">
-        <div className="w-full max-w-sm sm:max-w-2xl lg:max-w-4xl flex justify-center px-4">
+      <div className="relative z-10 w-full flex items-center justify-center min-h-[calc(100vh-2rem)]">
+        <div className="w-full max-w-4xl flex justify-center">
           <AnimatePresence mode="wait">
             {/* Timer Selection */}
             {showTimerSelect && (
@@ -178,18 +178,18 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
                   theme === 'dark' 
                     ? 'bg-white/10 border-white/30 text-white' 
                     : 'bg-white/80 border-gray-300/50 text-gray-800'
-                } backdrop-blur-xl rounded-3xl shadow-2xl border p-4 sm:p-6 lg:p-8 w-full max-w-lg sm:max-w-2xl`}>
-                  <div className="text-center mb-6 sm:mb-8">
-                    <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                      <Clock size={24} className={`${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} sm:w-8 sm:h-8`} />
-                      <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold">Game Timer</h2>
+                } backdrop-blur-xl rounded-3xl shadow-2xl border p-8`}>
+                  <div className="text-center mb-8">
+                    <div className="flex items-center justify-center gap-3 mb-4">
+                      <Clock size={32} className={theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} />
+                      <h2 className="text-3xl font-bold">Game Timer</h2>
                     </div>
-                    <p className={`text-sm sm:text-base lg:text-lg ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>
+                    <p className={`text-lg ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>
                       Choose your preferred time control
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                     <TimerButton
                       mode="none"
                       title="No Timer"
@@ -565,15 +565,15 @@ function TimerButton({ mode, title, description, color, theme, onClick }: TimerB
   return (
     <motion.button
       onClick={onClick}
-      className={`p-3 sm:p-4 lg:p-6 rounded-2xl border transition-all duration-300 hover:scale-105 bg-gradient-to-br ${colorMap[color as keyof typeof colorMap]} ${
+      className={`p-6 rounded-2xl border transition-all duration-300 hover:scale-105 bg-gradient-to-br ${colorMap[color as keyof typeof colorMap]} ${
         theme === 'dark' ? 'text-white hover:bg-white/10' : 'text-gray-800 hover:bg-gray-100'
-      } min-h-[80px] sm:min-h-[90px] lg:min-h-[100px]`}
+      }`}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
     >
       <div className="text-center">
-        <div className="text-sm sm:text-lg lg:text-2xl font-bold mb-1 sm:mb-2">{title}</div>
-        <div className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'} leading-tight`}>{description}</div>
+        <div className="text-2xl font-bold mb-2">{title}</div>
+        <div className={`text-sm ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>{description}</div>
       </div>
     </motion.button>
   );

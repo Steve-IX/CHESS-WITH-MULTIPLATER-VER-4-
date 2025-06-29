@@ -7,10 +7,33 @@ export class ChessSocket {
   private roomId: string | null = null;
 
   constructor() {
+    // Get the base URL for the Socket.IO connection
+    const baseURL = process.env.NEXT_PUBLIC_SOCKET_URL || 
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
     // Initialize socket connection
-    this.socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001', {
-      autoConnect: false
+    this.socket = io(baseURL, {
+      autoConnect: false,
+      path: '/api/socket',
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
     });
+
+    // Add error logging
+    if (this.socket) {
+      this.socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+      });
+
+      this.socket.on('connect_timeout', () => {
+        console.error('Socket connection timeout');
+      });
+
+      this.socket.on('error', (error) => {
+        console.error('Socket error:', error);
+      });
+    }
   }
 
   connect(): Promise<void> {

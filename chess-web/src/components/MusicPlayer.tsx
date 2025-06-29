@@ -341,20 +341,20 @@ export const MusicPlayer = () => {
     setIsSeeking(false);
     
     // Reset connection state for new audio setup
-    isConnectedRef.current = false;
-    stopVisualizer();
-    
+        isConnectedRef.current = false;
+        stopVisualizer();
+        
     // If was playing, continue playing the new track
     if (isPlaying && hasUserInteracted && audioRef.current) {
       const playNewTrack = async () => {
-        try {
+          try {
           // Small delay to ensure audio element is ready with new source
           await new Promise(resolve => setTimeout(resolve, 100));
           
           if (audioRef.current) {
             // Set volume
             audioRef.current.volume = isMuted ? 0 : volume;
-            
+
             // Wait for canplay if needed
             if (audioRef.current.readyState < 2) {
               await new Promise((resolve) => {
@@ -376,14 +376,14 @@ export const MusicPlayer = () => {
             
           }
         } catch (error) {
-          console.error('Error auto-playing new track:', error);
-          setIsPlaying(false);
+              console.error('Error auto-playing new track:', error);
+              setIsPlaying(false);
           setError('Failed to auto-play new track');
         }
       };
       
       playNewTrack();
-    }
+      }
   }, [currentTrackIndex]);
 
   // Audio event handlers
@@ -447,7 +447,7 @@ export const MusicPlayer = () => {
     const handleEnded = () => {
       console.log('Track ended:', currentTrack.title);
       stopVisualizer();
-      setIsPlaying(false);
+        setIsPlaying(false);
       
       // Auto-play next track if enabled and user has interacted
       if (autoPlayEnabled && hasUserInteracted) {
@@ -642,11 +642,7 @@ export const MusicPlayer = () => {
         initial={{ opacity: 0, y: 100, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut", delay: 1 }}
-        className={`fixed bottom-2 right-2 sm:bottom-4 sm:right-4 lg:bottom-6 lg:right-6 z-50 ${
-          isMinimized 
-            ? 'w-16 h-16 sm:w-20 sm:h-20' 
-            : 'w-80 sm:w-96 max-w-[calc(100vw-1rem)] sm:max-w-none'
-        } transition-all duration-500`}
+        className={`fixed bottom-6 right-6 z-50 ${isMinimized ? 'w-20 h-20' : 'w-96'} transition-all duration-500`}
       >
         {/* Chess-themed background with animated elements */}
         <div className="relative">
@@ -680,38 +676,38 @@ export const MusicPlayer = () => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="p-3 sm:p-4 lg:p-6"
+                  className="p-6"
                 >
                   {/* Header with chess piece icon */}
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
                       <motion.div
-                        className="text-lg sm:text-xl lg:text-2xl flex-shrink-0"
+                        className="text-2xl"
                         animate={{ rotate: isPlaying ? [0, 360] : 0 }}
                         transition={{ duration: 3, repeat: isPlaying ? Infinity : 0, ease: "linear" }}
                       >
                         ♔
                       </motion.div>
-                      <div className="min-w-0 flex-1">
-                        <div className={`${getContrastTextColor()} font-semibold text-xs sm:text-sm`}>
+                      <div>
+                        <div className={`${getContrastTextColor()} font-semibold text-sm`}>
                           {error ? 'Error' : isPlaying ? 'Now Playing' : 'Paused'}
                         </div>
-                        <div className={`${getSecondaryTextColor()} text-xs hidden sm:block`}>
+                        <div className={`${getSecondaryTextColor()} text-xs`}>
                           {currentTrackIndex + 1}/{playlist.length} • Music Player
                         </div>
                       </div>
                     </div>
                     <motion.button
                       onClick={() => handleMinimizeToggle(true)}
-                      className={`p-1.5 sm:p-2 rounded-xl ${
+                      className={`p-2 rounded-xl ${
                         theme === 'dark' 
                           ? 'hover:bg-white/10 text-white/70 hover:text-white' 
                           : 'hover:bg-gray-200/60 text-gray-600 hover:text-gray-800'
-                      } transition-all duration-300 flex-shrink-0`}
+                      } transition-all duration-300`}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
                     >
-                      <Minimize2 size={14} className="sm:w-4 sm:h-4" />
+                      <Minimize2 size={16} />
                     </motion.button>
                   </div>
 
@@ -727,9 +723,9 @@ export const MusicPlayer = () => {
                   )}
 
                   {/* Track Info with cover art */}
-                  <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 mb-3 sm:mb-4">
+                  <div className="flex items-center gap-4 mb-4">
                     <motion.div 
-                      className="w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-lg sm:rounded-xl overflow-hidden relative flex-shrink-0"
+                      className="w-20 h-20 rounded-xl overflow-hidden relative"
                       whileHover={{ scale: 1.05 }}
                       transition={{ duration: 0.2 }}
                     >
@@ -745,23 +741,23 @@ export const MusicPlayer = () => {
                         />
                       ) : null}
                       <div 
-                        className="absolute inset-0 w-full h-full rounded-lg sm:rounded-xl flex items-center justify-center"
+                        className="absolute inset-0 w-full h-full rounded-xl flex items-center justify-center"
                         style={{ 
                           background: `linear-gradient(135deg, ${colors.primary}20, ${colors.accent}20)`,
                           display: currentTrack.coverArt ? 'none' : 'flex'
                         }}
                       >
-                        <Music size={16} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" style={{ color: colors.primary }} />
+                        <Music size={24} style={{ color: colors.primary }} />
                       </div>
                     </motion.div>
                     <div className="flex-1 min-w-0">
-                      <div className={`${getContrastTextColor()} font-semibold text-xs sm:text-sm truncate`}>
+                      <div className={`${getContrastTextColor()} font-semibold text-sm truncate`}>
                         {currentTrack.title}
                       </div>
                       <div className={`${getSecondaryTextColor()} text-xs truncate`}>
                         {currentTrack.artist}
                       </div>
-                      <div className={`${getMutedTextColor()} text-xs truncate hidden sm:block`}>
+                      <div className={`${getMutedTextColor()} text-xs truncate`}>
                         {currentTrack.album}
                       </div>
                     </div>
@@ -819,11 +815,11 @@ export const MusicPlayer = () => {
                   </div>
 
                   {/* Controls */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <motion.button
                         onClick={previousTrack}
-                        className={`p-1.5 sm:p-2 rounded-xl transition-all duration-300 ${
+                        className={`p-2 rounded-xl transition-all duration-300 ${
                           theme === 'dark' 
                             ? 'hover:bg-white/10 text-white/70 hover:text-white' 
                             : 'hover:bg-gray-200/60 text-gray-600 hover:text-gray-800'
@@ -832,12 +828,12 @@ export const MusicPlayer = () => {
                         whileTap={{ scale: 0.9 }}
                         disabled={playlist.length <= 1}
                       >
-                        <SkipBack size={16} className="sm:w-[18px] sm:h-[18px]" />
+                        <SkipBack size={18} />
                       </motion.button>
 
                       <motion.button
                         onClick={togglePlay}
-                        className="p-2 sm:p-3 rounded-xl transition-all duration-300 text-white"
+                        className="p-3 rounded-xl transition-all duration-300 text-white"
                         style={{ 
                           background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
                           boxShadow: `0 4px 15px ${colors.primary}40`
@@ -846,15 +842,15 @@ export const MusicPlayer = () => {
                         whileTap={{ scale: 0.95 }}
                       >
                         {isPlaying ? (
-                          <Pause size={18} className="sm:w-5 sm:h-5" />
+                          <Pause size={20} />
                         ) : (
-                          <Play size={18} className="sm:w-5 sm:h-5" style={{ marginLeft: '1px' }} />
+                          <Play size={20} style={{ marginLeft: '2px' }} />
                         )}
                       </motion.button>
 
                       <motion.button
                         onClick={nextTrack}
-                        className={`p-1.5 sm:p-2 rounded-xl transition-all duration-300 ${
+                        className={`p-2 rounded-xl transition-all duration-300 ${
                           theme === 'dark' 
                             ? 'hover:bg-white/10 text-white/70 hover:text-white' 
                             : 'hover:bg-gray-200/60 text-gray-600 hover:text-gray-800'
@@ -863,14 +859,14 @@ export const MusicPlayer = () => {
                         whileTap={{ scale: 0.9 }}
                         disabled={playlist.length <= 1}
                       >
-                        <SkipForward size={16} className="sm:w-[18px] sm:h-[18px]" />
+                        <SkipForward size={18} />
                       </motion.button>
                     </div>
 
-                    <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="flex items-center gap-2">
                       <motion.button
                         onClick={toggleAutoPlay}
-                        className="p-1.5 sm:p-2 rounded-xl hover:bg-white/10 transition-all duration-300"
+                        className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300"
                         style={{ 
                           backgroundColor: autoPlayEnabled ? `${colors.primary}20` : 'rgba(255, 255, 255, 0.05)',
                           border: autoPlayEnabled ? `1px solid ${colors.primary}40` : '1px solid transparent'
@@ -880,22 +876,22 @@ export const MusicPlayer = () => {
                         title={`Auto-play: ${autoPlayEnabled ? 'On' : 'Off'}`}
                       >
                         {autoPlayEnabled ? (
-                          <Repeat size={14} className="sm:w-4 sm:h-4" style={{ color: colors.primary }} />
+                          <Repeat size={16} style={{ color: colors.primary }} />
                         ) : (
-                          <RotateCcw size={14} className="sm:w-4 sm:h-4 text-white/60" />
+                          <RotateCcw size={16} className="text-white/60" />
                         )}
                       </motion.button>
 
                       <motion.button
                         onClick={toggleMute}
-                        className="p-1.5 sm:p-2 rounded-xl hover:bg-white/10 transition-all duration-300 text-white/70 hover:text-white"
+                        className="p-2 rounded-xl hover:bg-white/10 transition-all duration-300 text-white/70 hover:text-white"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                       >
                         {isMuted ? (
-                          <VolumeX size={14} className="sm:w-4 sm:h-4" />
+                          <VolumeX size={16} />
                         ) : (
-                          <Volume2 size={14} className="sm:w-4 sm:h-4" />
+                          <Volume2 size={16} />
                         )}
                       </motion.button>
                       
@@ -906,7 +902,7 @@ export const MusicPlayer = () => {
                         step="0.05"
                         value={isMuted ? 0 : volume}
                         onChange={handleVolumeChange}
-                        className="w-12 sm:w-16 h-2 rounded-full appearance-none cursor-pointer bg-white/10"
+                        className="w-16 h-2 rounded-full appearance-none cursor-pointer bg-white/10"
                         style={{
                           background: `linear-gradient(to right, ${colors.primary} 0%, ${colors.primary} ${(isMuted ? 0 : volume) * 100}%, rgba(255, 255, 255, 0.2) ${(isMuted ? 0 : volume) * 100}%, rgba(255, 255, 255, 0.2) 100%)`
                         }}

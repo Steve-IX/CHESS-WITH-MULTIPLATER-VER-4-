@@ -133,24 +133,22 @@ export default function Home() {
 
   return (
     <>
-      <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="relative">
         <button
           onClick={handleBackToMenu}
-          className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 px-3 py-2 sm:px-4 sm:py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm sm:text-base"
+          className="absolute top-4 left-4 z-10 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
         >
-          ← Back
+          ← Back to Menu
         </button>
         
-        <div className="pt-16 sm:pt-20 pb-4 px-2 sm:px-4">
-          <ChessGame
-            gameMode={currentMode}
-            difficulty={difficulty}
-            themeId={selectedTheme}
-            timerMode={timerMode}
-            customTime={customTime}
-            onGameOver={handleGameOver}
-          />
-        </div>
+        <ChessGame
+          gameMode={currentMode}
+          difficulty={difficulty}
+          themeId={selectedTheme}
+          timerMode={timerMode}
+          customTime={customTime}
+          onGameOver={handleGameOver}
+        />
       </div>
       <MusicPlayer />
     </>

@@ -7,12 +7,6 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'Chess Game with Music Player',
   description: 'A multiplayer chess game with integrated music player built with Next.js',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
 };
 
 export default function RootLayout({
