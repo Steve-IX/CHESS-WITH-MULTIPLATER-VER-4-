@@ -41,9 +41,7 @@ export class ChessSocket {
           reconnectionAttempts: 10,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
-          randomizationFactor: 0.5,
-          pingTimeout: 60000,
-          pingInterval: 25000
+          randomizationFactor: 0.5
         });
 
         this.setupEventListeners();
