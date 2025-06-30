@@ -325,17 +325,6 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     }
   };
 
-  const handleMove = (move: Move) => {
-    // Send move to server
-    chessSocket.makeMove(move);
-    console.log('Move sent to server:', move);
-  };
-
-  const handleGameOver = (result: GameResult) => {
-    console.log('Game over:', result);
-    // Could add additional game over handling here
-  };
-
   // Connection status indicator
   const ConnectionStatus = () => (
     <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
