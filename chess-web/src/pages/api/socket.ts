@@ -150,21 +150,22 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         allowedHeaders: ["Content-Type"]
       },
       allowEIO3: true,
-      transports: ['websocket', 'polling'], // Prefer websocket like Java TCP
-      pingTimeout: 45000, // Longer timeout for stability
-      pingInterval: 20000, // More frequent pings
+      // Optimized for Vercel serverless environment
+      transports: ['polling'], // Only polling for Vercel compatibility
+      pingTimeout: 20000, // Shorter timeout for serverless
+      pingInterval: 10000, // More frequent pings for serverless
       maxHttpBufferSize: 1e6,
-      connectTimeout: 30000,
+      connectTimeout: 20000, // Shorter connect timeout
       serveClient: false,
       httpCompression: true,
       perMessageDeflate: {
         threshold: 1024,
       },
-      upgradeTimeout: 10000,
-      allowUpgrades: true,
+      upgradeTimeout: 5000, // Shorter upgrade timeout
+      allowUpgrades: false, // Disable WebSocket upgrades for Vercel
       cookie: false,
-      // Additional stability options
-      destroyUpgrade: false,
+      // Vercel serverless optimizations
+      destroyUpgrade: true,
       destroyUpgradeTimeout: 1000
     });
 

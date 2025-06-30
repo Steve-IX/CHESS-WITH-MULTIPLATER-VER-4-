@@ -41,7 +41,7 @@ export class ChessSocket {
         this.socket.disconnect();
       }
 
-      // Initialize socket connection with robust settings inspired by Java networking
+      // Initialize socket connection with Vercel-optimized settings
       const socketUrl = process.env.NODE_ENV === 'production' 
         ? window.location.origin 
         : 'http://localhost:3000';
@@ -49,21 +49,28 @@ export class ChessSocket {
       this.socket = io(socketUrl, {
         path: '/api/socket',
         autoConnect: false,
-        transports: ['websocket', 'polling'], // Prefer websocket like Java TCP sockets
-        timeout: 30000,
+        // Prioritize polling for Vercel serverless compatibility
+        transports: ['polling'], // Only use polling for Vercel
+        timeout: 20000, // Shorter timeout for faster fallback
         forceNew: false,
-        upgrade: true,
-        rememberUpgrade: true,
+        upgrade: false, // Disable upgrade to WebSocket
+        rememberUpgrade: false,
         reconnection: true,
         reconnectionAttempts: this.maxReconnectionAttempts,
-        reconnectionDelay: 2000,
-        reconnectionDelayMax: 10000,
-        randomizationFactor: 0.3,
+        reconnectionDelay: 1000, // Faster initial retry
+        reconnectionDelayMax: 5000, // Lower max delay
+        randomizationFactor: 0.2, // Less randomization
         closeOnBeforeunload: false,
-        // Additional stability options
+        // Additional Vercel-friendly options
         multiplex: true,
         rejectUnauthorized: false,
-        withCredentials: false
+        withCredentials: false,
+        // Force polling options
+        polling: {
+          extraHeaders: {
+            'Cache-Control': 'no-cache'
+          }
+        }
       });
 
       this.setupEventListeners();
@@ -120,12 +127,23 @@ export class ChessSocket {
     this.socket.on('connect_error', (error) => {
       console.error('❌ Connection error:', error.message || error);
       this.connectionState = 'disconnected';
-      this.emitCallback('connect_error', error);
+      
+      // Provide more specific error messages for common issues
+      let errorMessage = 'Connection failed';
+      if (error.message?.includes('websocket')) {
+        errorMessage = 'WebSocket connection failed, retrying with polling...';
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Connection timeout, retrying...';
+      } else if (error.message?.includes('xhr poll error')) {
+        errorMessage = 'Network error, please check your connection';
+      }
+      
+      this.emitCallback('connect_error', new Error(errorMessage));
       
       // Reinitialize socket if connection fails repeatedly
-      if (this.reconnectionAttempts > 5) {
-        console.log('🔄 Reinitializing socket after multiple connection failures');
-        setTimeout(() => this.initializeSocket(), 5000);
+      if (this.reconnectionAttempts > 3) {
+        console.log('🔄 Multiple connection failures, reinitializing socket...');
+        setTimeout(() => this.initializeSocket(), 3000);
       }
     });
 
@@ -346,21 +364,21 @@ export class ChessSocket {
     this.stopHeartbeat();
     this.stopHeartbeatCheck();
     
-    // Send ping every 20 seconds (like Java heartbeat pattern)
+    // Send ping every 8 seconds (optimized for polling transport)
     this.heartbeatInterval = setInterval(() => {
       if (this.socket?.connected) {
         this.socket.emit('ping');
       }
-    }, 20000);
+    }, 8000);
     
-    // Check for heartbeat response every 30 seconds
+    // Check for heartbeat response every 15 seconds
     this.heartbeatCheckInterval = setInterval(() => {
       const now = Date.now();
-      if (this.lastHeartbeat > 0 && now - this.lastHeartbeat > 45000) {
+      if (this.lastHeartbeat > 0 && now - this.lastHeartbeat > 25000) {
         console.warn('⚠️ Heartbeat timeout detected, forcing reconnect');
         this.socket?.disconnect();
       }
-    }, 30000);
+    }, 15000);
     
     this.lastHeartbeat = Date.now();
   }
