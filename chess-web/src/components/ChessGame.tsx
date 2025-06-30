@@ -248,48 +248,20 @@ export function ChessGame({
     try {
       await chessSocket.connect();
       
-      // Handle confirmed moves from server (like Java receiveMove)
       chessSocket.onMoveMade((data) => {
-        console.log('🔄 Updating game state from server:', data);
         setGameState(data.gameState);
-        
-        // Add move notation for confirmed moves
-        if (data.move) {
-          const notation = generateMoveNotation(data.move);
-          setMoveNotations(prev => [...prev, notation]);
-        }
-        
-        // Re-enable animations after server confirmation
-        setIsAnimating(false);
-      });
-
-      // Handle move rejections (like Java error handling)
-      chessSocket.onMoveRejected((error) => {
-        console.error('Move rejected by server:', error);
-        setIsAnimating(false);
-        setGameStatus(`Move rejected: ${error}`);
-        setTimeout(() => updateGameStatus(), 3000);
-      });
-
-      // Handle connection issues
-      chessSocket.onConnectionLost(() => {
-        console.warn('Connection lost, attempting to reconnect...');
-        setGameStatus('Connection lost, reconnecting...');
       });
 
       chessSocket.onPlayerJoined(() => {
         setIsWaitingForOpponent(false);
-        setGameStatus('Opponent joined! Game starting...');
       });
 
       chessSocket.onPlayerLeft(() => {
         setGameStatus('Opponent disconnected');
-        setIsWaitingForOpponent(true);
       });
 
     } catch (error) {
       console.error('Failed to initialize multiplayer:', error);
-      setGameStatus('Failed to connect to server');
     }
   };
 
@@ -421,24 +393,6 @@ export function ChessGame({
     setIsAnimating(true);
     
     try {
-      // For online games, send move to server first and wait for confirmation
-      if (gameMode === 'online') {
-        if (onMove) {
-          // Use the parent component's onMove handler
-          onMove(move);
-        } else {
-          // Send to socket and wait for server to broadcast the move back
-          chessSocket.makeMove(move);
-        }
-        
-        // Don't update local state immediately for online games
-        // Wait for server confirmation via onMoveMade event
-        setSelectedSquare(null);
-        setLegalMoves([]);
-        return;
-      }
-      
-      // For local/AI games, update immediately
       let newGameState = makeMove(gameState, move);
       
       // Start timer on first move - merge with the move state update
@@ -452,13 +406,22 @@ export function ChessGame({
       
       setGameState(newGameState);
     
-      // Add move notation
-      const notation = generateMoveNotation(move);
-      setMoveNotations(prev => [...prev, notation]);
+    // Add move notation
+    const notation = generateMoveNotation(move);
+    setMoveNotations(prev => [...prev, notation]);
     
       // Clear selection
       setSelectedSquare(null);
       setLegalMoves([]);
+    
+      // Send move if online
+      if (gameMode === 'online') {
+        if (onMove) {
+          onMove(move);
+        } else {
+          chessSocket.makeMove(move);
+        }
+      }
 
       // Check for game end
       if (newGameState.isCheckmate) {
