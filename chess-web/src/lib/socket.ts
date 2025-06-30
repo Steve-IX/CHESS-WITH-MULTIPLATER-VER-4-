@@ -32,20 +32,18 @@ export class ChessSocket {
         this.socket = io(socketUrl, {
           path: '/api/socket',
           autoConnect: false,
-          transports: ['polling'],
-          timeout: 60000,
-          forceNew: true,
-          upgrade: false,
-          rememberUpgrade: false,
+          transports: ['polling', 'websocket'],
+          timeout: 30000,
+          forceNew: false,
+          upgrade: true,
+          rememberUpgrade: true,
           reconnection: true,
-          reconnectionAttempts: 5,
+          reconnectionAttempts: 10,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           randomizationFactor: 0.5,
-          withCredentials: false,
-          extraHeaders: {
-            "Access-Control-Allow-Origin": "*"
-          }
+          pingTimeout: 60000,
+          pingInterval: 25000
         });
 
         this.setupEventListeners();
@@ -460,7 +458,7 @@ export class ChessSocket {
   onChatMessage(callback: (data: { playerId: string, message: string, playerColor: PlayerColor }) => void): () => void {
     this.addCallback('chat-message', callback);
     return () => this.removeCallback('chat-message', callback);
-  }
+        }
 
   onError(callback: (error: string) => void): () => void {
     this.addCallback('error', callback);
@@ -490,7 +488,7 @@ export class ChessSocket {
   onReconnectError(callback: (error: any) => void): () => void {
     this.addCallback('reconnect_error', callback);
     return () => this.removeCallback('reconnect_error', callback);
-  }
+    }
 
   onReconnectFailed(callback: () => void): () => void {
     this.addCallback('reconnect_failed', callback);
@@ -505,7 +503,7 @@ export class ChessSocket {
   onPlayerDisconnected(callback: (data: { playerColor: PlayerColor, playerId: string }) => void): () => void {
     this.addCallback('player-disconnected', callback);
     return () => this.removeCallback('player-disconnected', callback);
-  }
+    }
 
   // Getters
   getIsHost(): boolean {

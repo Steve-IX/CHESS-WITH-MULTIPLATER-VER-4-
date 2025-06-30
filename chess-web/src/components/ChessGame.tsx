@@ -90,12 +90,14 @@ const TimerDisplay = ({
 };
 
 export function ChessGame({
+  gameState: initialGameState,
   gameMode = 'local',
   difficulty = 'medium',
   playerColor = 'white',
   themeId = 'classic',
   timerMode = 'none',
   customTime = 15,
+  onMove,
   onGameOver,
 }: ChessGameProps) {
   
@@ -133,7 +135,14 @@ export function ChessGame({
     timer: getInitialTimerState(),
   };
 
-  const [gameState, setGameState] = useState<GameState>(initialState);
+  const [gameState, setGameState] = useState<GameState>(initialGameState || initialState);
+  
+  // Update game state when external state changes (for online games)
+  useEffect(() => {
+    if (initialGameState && gameMode === 'online') {
+      setGameState(initialGameState);
+    }
+  }, [initialGameState, gameMode]);
   const [selectedSquare, setSelectedSquare] = useState<Position | null>(null);
   const [legalMoves, setLegalMoves] = useState<Position[]>([]);
   const [hoveredSquare, setHoveredSquare] = useState<Position | null>(null);
@@ -376,6 +385,7 @@ export function ChessGame({
       // Send move if online
     if (gameMode === 'online') {
         chessSocket.makeMove(move);
+        onMove?.(move);
     }
 
       // Check for game end
@@ -429,16 +439,22 @@ export function ChessGame({
     setIsTimerPaused(prev => !prev);
   };
 
-  const isSquareHighlighted = (x: number, y: number): boolean => {
-    return selectedSquare?.x === x && selectedSquare?.y === y;
+  const isSquareHighlighted = (displayRow: number, displayCol: number): boolean => {
+    const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
+    const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
+    return selectedSquare?.x === boardRow && selectedSquare?.y === boardCol;
   };
 
-  const isSquareLegalMove = (x: number, y: number): boolean => {
-    return legalMoves.some(move => move.x === x && move.y === y);
+  const isSquareLegalMove = (displayRow: number, displayCol: number): boolean => {
+    const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
+    const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
+    return legalMoves.some(move => move.x === boardRow && move.y === boardCol);
   };
 
-  const isSquareInCheck = (x: number, y: number): boolean => {
-    const piece = gameState.board[x][y];
+  const isSquareInCheck = (displayRow: number, displayCol: number): boolean => {
+    const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
+    const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
+    const piece = gameState.board[boardRow][boardCol];
     return piece?.type === 'king' && piece.color === gameState.currentPlayer && gameState.isCheck;
   };
 
@@ -542,31 +558,36 @@ export function ChessGame({
           <div className="relative">
             <div className={`grid grid-cols-8 gap-0 border-4 ${theme.boardBorder} rounded-xl overflow-hidden shadow-2xl ${theme.boardRing}`}>
               {Array.from({ length: 64 }, (_, i) => {
-                const x = Math.floor(i / 8);
-                const y = i % 8;
-                const isLight = (x + y) % 2 === 0;
-                const piece = gameState.board[x][y];
+                const displayRow = Math.floor(i / 8);
+                const displayCol = i % 8;
+                
+                // Convert display coordinates to actual board coordinates
+                const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
+                const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
+                
+                const isLight = (displayRow + displayCol) % 2 === 0;
+                const piece = gameState.board[boardRow][boardCol];
                 
                 return (
                   <motion.div
-                    key={`${x}-${y}`}
+                    key={`${displayRow}-${displayCol}`}
                     className={`
                       w-16 h-16 flex items-center justify-center cursor-pointer relative
                       ${isLight ? theme.lightSquare : theme.darkSquare}
-                      ${isSquareHighlighted(x, y) ? 'ring-4 ring-blue-500 ring-inset' : ''}
-                      ${isSquareLegalMove(x, y) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
-                      ${isSquareInCheck(x, y) ? 'ring-4 ring-red-500 ring-inset' : ''}
+                      ${isSquareHighlighted(displayRow, displayCol) ? 'ring-4 ring-blue-500 ring-inset' : ''}
+                      ${isSquareLegalMove(displayRow, displayCol) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
+                      ${isSquareInCheck(displayRow, displayCol) ? 'ring-4 ring-red-500 ring-inset' : ''}
                       hover:brightness-110 transition-all duration-200
-                      ${hoveredSquare?.x === x && hoveredSquare?.y === y ? 'bg-opacity-80' : ''}
+                      ${hoveredSquare?.x === boardRow && hoveredSquare?.y === boardCol ? 'bg-opacity-80' : ''}
                     `}
-                    onClick={() => handleSquareClick({ x, y })}
-                    onMouseEnter={() => setHoveredSquare({ x, y })}
+                    onClick={() => handleSquareClick(displayRow, displayCol)}
+                    onMouseEnter={() => setHoveredSquare({ x: boardRow, y: boardCol })}
                     onMouseLeave={() => setHoveredSquare(null)}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
                     {/* Legal move indicator */}
-                    {isSquareLegalMove(x, y) && (
+                    {isSquareLegalMove(displayRow, displayCol) && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className={`w-4 h-4 rounded-full ${piece ? 'ring-3 ring-emerald-400 ring-opacity-80' : 'bg-emerald-400/60'}`} />
                       </div>
@@ -576,20 +597,26 @@ export function ChessGame({
                     {piece && (
                       <ChessPiece 
                         piece={piece} 
-                        isHovered={hoveredSquare?.x === x && hoveredSquare?.y === y}
+                        isHovered={hoveredSquare?.x === boardRow && hoveredSquare?.y === boardCol}
                         themeId={themeId}
                       />
                     )}
                     
                     {/* Coordinate labels */}
-                    {x === 7 && (
+                    {displayRow === 7 && (
                       <div className={`absolute bottom-1 right-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
-                        {String.fromCharCode(97 + y)}
+                        {playerColor === 'black' 
+                          ? String.fromCharCode(97 + (7 - displayCol))
+                          : String.fromCharCode(97 + displayCol)
+                        }
                       </div>
                     )}
-                    {y === 0 && (
+                    {displayCol === 0 && (
                       <div className={`absolute top-1 left-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
-                        {8 - x}
+                        {playerColor === 'black' 
+                          ? displayRow + 1
+                          : 8 - displayRow
+                        }
                       </div>
                     )}
                   </motion.div>

@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { Server as ServerIO } from 'socket.io';
 import { Server as NetServer } from 'http';
 import { GameState, Move, PlayerColor } from '@/lib/types';
+import { createInitialBoard, makeMove, isInCheck, getAllLegalMoves } from '@/lib/chess';
 
 interface Player {
   id: string;
@@ -21,18 +22,10 @@ interface Room {
 
 const rooms = new Map<string, Room>();
 
-// Initialize a basic chess game state
+// Initialize a proper chess game state
 function createInitialGameState(): GameState {
-  // Create initial chess board
-  const board: (any | null)[][] = Array(8).fill(null).map(() => Array(8).fill(null));
+  const board = createInitialBoard();
   
-  // Set up pieces (simplified initial setup)
-  const pieces = {
-    'rook': '♜', 'knight': '♞', 'bishop': '♝', 'queen': '♛', 'king': '♚', 'pawn': '♟'
-  };
-  
-  // Initial board setup would go here
-  // For now, return a basic game state structure
   return {
     board,
     currentPlayer: 'white' as PlayerColor,
@@ -48,42 +41,30 @@ function createInitialGameState(): GameState {
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Set CORS headers for all requests
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
   // Type assertion to access the socket server
   const socketRes = res as any;
   
   if (!socketRes.socket.server.io) {
     console.log('🚀 Setting up Chess Socket.IO server...');
     
-    try {
     const io = new ServerIO(socketRes.socket.server, {
       path: '/api/socket',
       addTrailingSlash: false,
       cors: {
         origin: "*",
         methods: ["GET", "POST"],
-        allowedHeaders: ["*"],
-        credentials: false
+        credentials: true,
+        allowedHeaders: ["Content-Type"]
       },
       allowEIO3: true,
-      transports: ['polling'],
-      pingTimeout: 120000,
+      transports: ['polling', 'websocket'],
+      pingTimeout: 60000,
       pingInterval: 25000,
       maxHttpBufferSize: 1e6,
-      connectTimeout: 60000,
+      connectTimeout: 30000,
       serveClient: false,
-      allowUpgrades: false,
-      cookie: false
+      httpCompression: false,
+      perMessageDeflate: false
     });
 
     io.on('connection', (socket) => {
@@ -132,26 +113,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           return;
         }
         
-        // Check if player is already in the room
-        const existingPlayer = Array.from(room.players.values()).find(p => p.id === socket.id);
-        if (existingPlayer) {
-          console.log(`⚠️ Player ${socket.id} already in room ${roomId}`);
-          socket.emit('room-joined', { 
-            roomId, 
-            playerColor: existingPlayer.color,
-            gameState: room.gameState ? {
-              roomId,
-              players: Object.fromEntries(
-                Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
-              ),
-              gameState: room.gameState,
-              isGameStarted: room.isGameStarted,
-              spectators: room.spectators
-            } : undefined
-          });
-          return;
-        }
-        
         // Check if room is full (2 players max)
         if (room.players.size >= 2) {
           console.log(`❌ Room ${roomId} is full`);
@@ -161,15 +122,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         // Assign player color (black if white is taken)
         const playerColor: PlayerColor = room.players.has('white') ? 'black' : 'white';
-        
-        // Clean up any disconnected players with this color
-        if (room.players.has(playerColor)) {
-          const existingPlayer = room.players.get(playerColor)!;
-          if (!io.sockets.sockets.get(existingPlayer.id)) {
-            console.log(`🧹 Cleaning up disconnected player ${existingPlayer.id}`);
-            room.players.delete(playerColor);
-          }
-        }
         
         room.players.set(playerColor, {
           id: socket.id,
@@ -213,7 +165,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         io.to(roomId).emit('room-updated', roomState);
         console.log(`📡 Room state updated for ${roomId}:`, roomState);
         
-        // Auto-start game if 2 players with a delay to ensure proper connection
+        // Auto-start game if 2 players
         if (room.players.size === 2 && !room.isGameStarted) {
           console.log(`🎮 Starting game in room ${roomId} with 2 players`);
           
@@ -230,14 +182,12 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             spectators: room.spectators
           };
           
-          // Increased delay to ensure both players are properly connected
+          // Give a small delay to ensure both players are properly connected
           setTimeout(() => {
-            if (room.players.size === 2) {  // Double check players are still connected
-              io.to(roomId).emit('game-started', gameState);
-              console.log(`🎮 Game started in room ${roomId} with players:`, 
-                Array.from(room.players.entries()).map(([color, player]) => `${color}: ${player.id}`));
-            }
-          }, 1000);  // Increased delay to 1 second
+            io.to(roomId).emit('game-started', gameState);
+            console.log(`🎮 Game started in room ${roomId} with players:`, 
+              Array.from(room.players.entries()).map(([color, player]) => `${color}: ${player.id}`));
+          }, 100);
         }
       });
 
@@ -299,17 +249,56 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           return;
         }
         
-        // Apply move to game state (simplified - in real implementation, validate move)
-        room.gameState.moveHistory.push(data.move);
-        room.gameState.currentPlayer = room.gameState.currentPlayer === 'white' ? 'black' : 'white';
-        
-        // Broadcast move to all players in room
-        socket.to(data.roomId).emit('move-made', {
-          move: data.move,
-          gameState: room.gameState
-        });
-        
-        console.log(`♟️ Move made in room ${data.roomId}:`, data.move);
+        try {
+          // Apply move to game state using proper chess logic
+          const newGameState = makeMove(room.gameState, data.move);
+          
+          // Update check status
+          newGameState.isCheck = isInCheck(newGameState, newGameState.currentPlayer);
+          
+          // Check for checkmate/stalemate
+          const legalMoves = getAllLegalMoves(newGameState, newGameState.currentPlayer);
+          if (legalMoves.length === 0) {
+            if (newGameState.isCheck) {
+              newGameState.isCheckmate = true;
+              const winner = newGameState.currentPlayer === 'white' ? 'black' : 'white';
+              
+              // Broadcast game over
+              io.to(data.roomId).emit('game-over', {
+                reason: 'checkmate',
+                winner
+              });
+              
+              room.isGameStarted = false;
+              console.log(`🏁 Checkmate in room ${data.roomId} - ${winner} wins`);
+            } else {
+              newGameState.isStalemate = true;
+              
+              // Broadcast game over
+              io.to(data.roomId).emit('game-over', {
+                reason: 'stalemate',
+                winner: 'draw'
+              });
+              
+              room.isGameStarted = false;
+              console.log(`🏁 Stalemate in room ${data.roomId}`);
+            }
+          }
+          
+          room.gameState = newGameState;
+          
+          // Broadcast move to all players in room
+          io.to(data.roomId).emit('move-made', {
+            move: data.move,
+            gameState: room.gameState
+          });
+          
+          console.log(`♟️ Move made in room ${data.roomId}:`, data.move);
+          
+        } catch (error) {
+          console.error('Invalid move:', error);
+          socket.emit('error', 'Invalid move');
+        }
       });
 
       // Chat message
@@ -445,7 +434,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
               if (room.players.size === 0) {
               rooms.delete(roomId);
                 console.log(`🗑️ Room ${roomId} deleted (empty)`);
-              }
+            }
             } else {
               // For transport errors, just notify of temporary disconnection
               socket.to(roomId).emit('player-disconnected', {
@@ -479,32 +468,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }, 5 * 60 * 1000); // Check every 5 minutes
 
     socketRes.socket.server.io = io;
-      
-      // Handle Socket.IO upgrade and polling requests
-      io.engine.on("connection_error", (err) => {
-        console.log('Socket.IO connection error:', err);
-      });
-      
-      console.log('✅ Socket.IO server initialized successfully');
-    } catch (error) {
-      console.error('❌ Failed to initialize Socket.IO server:', error);
-      res.status(500).json({ error: 'Failed to initialize Socket.IO server' });
-      return;
-    }
   }
 
-  // Handle the Socket.IO request
-  try {
-    if (socketRes.socket.server.io) {
-      // Let Socket.IO handle the request
-      socketRes.socket.server.io.engine.handleRequest(req, res);
-    } else {
-      res.status(500).json({ error: 'Socket.IO server not available' });
-    }
-  } catch (error) {
-    console.error('❌ Error handling Socket.IO request:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  res.end();
 }
 
 function generateRoomId(): string {
