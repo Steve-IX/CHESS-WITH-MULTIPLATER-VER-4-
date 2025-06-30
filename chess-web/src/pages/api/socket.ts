@@ -71,9 +71,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     io.on('connection', (socket) => {
       console.log('🔌 Client connected:', socket.id);
 
-      // Handle ping for connection keepalive
-      socket.on('ping', () => {
-        socket.emit('pong');
+      // Handle ping for connection keepalive (enhanced like Java TCP)
+      socket.on('ping', (timestamp) => {
+        const latency = timestamp ? Date.now() - timestamp : 0;
+        socket.emit('pong', { timestamp, latency });
+        // Log only significant latency issues
+        if (latency > 1000) {
+          console.log(`⚠️ High latency detected for ${socket.id}: ${latency}ms`);
+        }
       });
 
       // Create room
@@ -229,24 +234,27 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       });
 
       // Make move
-      socket.on('make-move', (data: { roomId: string, move: Move }) => {
+      socket.on('make-move', (data: { roomId: string, move: Move }, acknowledgment) => {
         const room = rooms.get(data.roomId);
         
         if (!room || !room.isGameStarted || !room.gameState) {
-          socket.emit('error', 'Game not active');
+          console.error(`❌ Game not active in room ${data.roomId}`);
+          if (acknowledgment) acknowledgment({ success: false, error: 'Game not active' });
           return;
         }
         
         // Verify player is in the game
         const player = Array.from(room.players.values()).find(p => p.id === socket.id);
         if (!player) {
-          socket.emit('error', 'Not a player in this game');
+          console.error(`❌ Socket ${socket.id} not a player in room ${data.roomId}`);
+          if (acknowledgment) acknowledgment({ success: false, error: 'Not a player in this game' });
           return;
         }
         
         // Verify it's the player's turn
         if (room.gameState.currentPlayer !== player.color) {
-          socket.emit('error', 'Not your turn');
+          console.error(`❌ Not ${player.color}'s turn in room ${data.roomId}, current: ${room.gameState.currentPlayer}`);
+          if (acknowledgment) acknowledgment({ success: false, error: 'Not your turn' });
           return;
         }
         
@@ -283,20 +291,30 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             newGameState.isCheck = isInCheck(newGameState, opponent);
           }
           
-          // Update room state
+          // Update room state BEFORE broadcasting
           room.gameState = newGameState;
           
-          // Broadcast move to all players in room (including the sender for confirmation)
-          io.to(data.roomId).emit('move-made', {
-            move: data.move,
-            gameState: newGameState
-          });
+          // Send immediate acknowledgment to sender (like Java auto-flush response)
+          if (acknowledgment) {
+            acknowledgment({ success: true });
+            console.log(`✅ Move acknowledged for ${player.color} in room ${data.roomId}`);
+          }
           
-          console.log(`♟️ Move made in room ${data.roomId}:`, data.move, `New turn: ${newGameState.currentPlayer}`);
+          // Broadcast move to all players in room with enhanced logging
+          const moveData = {
+            move: data.move,
+            gameState: newGameState,
+            player: player.color,
+            timestamp: Date.now()
+          };
+          
+          io.to(data.roomId).emit('move-made', moveData);
+          
+          console.log(`♟️ Move broadcast in room ${data.roomId}: ${player.color} ${data.move.piece.type} ${String.fromCharCode(97 + data.move.from.y)}${8 - data.move.from.x} -> ${String.fromCharCode(97 + data.move.to.y)}${8 - data.move.to.x}, Next: ${newGameState.currentPlayer}`);
           
         } catch (error) {
-          console.error('Invalid move:', error);
-          socket.emit('error', 'Invalid move');
+          console.error(`❌ Invalid move in room ${data.roomId}:`, error);
+          if (acknowledgment) acknowledgment({ success: false, error: 'Invalid move' });
         }
       });
 

@@ -170,6 +170,14 @@ export class ChessSocket {
       console.log('⚠️ Player temporarily disconnected:', data);
       this.emitCallback('player-disconnected', data);
     });
+
+    this.socket.on('pong', (data) => {
+      const latency = data?.latency || 0;
+      if (latency > 1000) {
+        console.warn(`⚠️ High latency detected: ${latency}ms`);
+        this.emitCallback('high-latency', latency);
+      }
+    });
   }
 
   private emitCallback(event: string, data?: any): void {
@@ -274,11 +282,16 @@ export class ChessSocket {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
+    
+    // Enhanced heartbeat similar to Java TCP keepalive
     this.heartbeatInterval = setInterval(() => {
-      if (this.socket && this.socket.connected) {
-        this.socket.emit('ping');
+      if (this.socket?.connected) {
+        this.socket.emit('ping', Date.now());
+      } else {
+        console.warn('⚠️ Socket disconnected during heartbeat');
+        this.emitCallback('connection-lost');
       }
-    }, 30000); // Send ping every 30 seconds
+    }, 5000); // More frequent than the default 25s
   }
 
   private stopHeartbeat(): void {
@@ -364,13 +377,25 @@ export class ChessSocket {
 
   // Game actions
   makeMove(move: Move): void {
-    if (this.socket && this.roomId && this.socket.connected) {
-      console.log('🎯 Making move:', move);
-      this.socket.emit('make-move', {
-        roomId: this.roomId,
-        move: move
-      });
+    if (!this.socket || !this.roomId) {
+      console.error('Cannot make move: socket or room not available');
+      return;
     }
+
+    console.log('📤 Sending move:', move, 'to room:', this.roomId);
+    
+    // Add acknowledgment callback for move confirmation (like Java auto-flush)
+    this.socket.emit('make-move', { 
+      roomId: this.roomId, 
+      move 
+    }, (response: any) => {
+      if (response?.success) {
+        console.log('✅ Move acknowledged by server');
+      } else {
+        console.error('❌ Move rejected by server:', response?.error);
+        this.emitCallback('move-rejected', response?.error);
+      }
+    });
   }
 
   startGame(): void {
@@ -503,6 +528,21 @@ export class ChessSocket {
     this.addCallback('player-disconnected', callback);
     return () => this.removeCallback('player-disconnected', callback);
     }
+
+  onMoveRejected(callback: (error: string) => void): () => void {
+    this.addCallback('move-rejected', callback);
+    return () => this.removeCallback('move-rejected', callback);
+  }
+
+  onConnectionLost(callback: () => void): () => void {
+    this.addCallback('connection-lost', callback);
+    return () => this.removeCallback('connection-lost', callback);
+  }
+
+  onHighLatency(callback: (latency: number) => void): () => void {
+    this.addCallback('high-latency', callback);
+    return () => this.removeCallback('high-latency', callback);
+  }
 
   // Getters
   getIsHost(): boolean {

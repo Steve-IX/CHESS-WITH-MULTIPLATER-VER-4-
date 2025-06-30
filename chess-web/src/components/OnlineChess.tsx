@@ -156,8 +156,12 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       }),
 
       chessSocket.onMoveMade((data) => {
-        console.log('Received move update:', data);
+        console.log('🔄 Server confirmed move:', data);
         setGameState(data.gameState);
+        
+        // Show move feedback to enhance user experience
+        const moveInfo = data.player === playerColor ? 'Your move' : 'Opponent\'s move';
+        console.log(`${moveInfo} confirmed by server`);
       }),
 
       chessSocket.onGameOver((data) => {
@@ -203,6 +207,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       }),
 
       chessSocket.onError((error) => {
+        console.error('Socket error:', error);
         setError(error);
       }),
 
@@ -219,6 +224,19 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       chessSocket.onPlayerDisconnected((data) => {
         console.log('Player temporarily disconnected:', data);
         addSystemMessage(`Opponent temporarily disconnected, waiting for reconnection...`);
+      }),
+
+      // Enhanced connection monitoring (like Java networking)
+      chessSocket.onMoveRejected((error) => {
+        console.error('Move was rejected:', error);
+        setError(`Move rejected: ${error}`);
+        setTimeout(() => setError(null), 3000);
+      }),
+
+      chessSocket.onConnectionLost(() => {
+        console.warn('Connection lost, attempting to reconnect...');
+        setConnectionStatus('connecting');
+        setError('Connection lost, reconnecting...');
       })
     ];
 
@@ -282,8 +300,15 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   const handleMove = useCallback((move: Move) => {
     if (typeof window === 'undefined') return;
     
+    // Verify it's the player's turn (double-check on client side)
     if (playerColor && gameState?.currentPlayer === playerColor) {
+      console.log(`📤 ${playerColor} sending move:`, move);
       chessSocket.makeMove(move);
+      
+      // Don't update local state - wait for server confirmation
+      // This prevents the race condition between players
+    } else {
+      console.warn('Attempted to move when not your turn');
     }
   }, [playerColor, gameState]);
 
