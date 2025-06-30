@@ -265,31 +265,6 @@ export function ChessGame({
     }
   };
 
-  // Function to get board perspective based on player color
-  const getBoardForDisplay = useCallback(() => {
-    if (gameMode === 'online' && playerColor === 'black') {
-      // Flip the board for black player
-      return gameState.board.slice().reverse().map(row => row.slice().reverse());
-    }
-    return gameState.board;
-  }, [gameMode, playerColor, gameState.board]);
-
-  // Function to convert display coordinates to actual board coordinates
-  const getActualCoordinates = useCallback((displayX: number, displayY: number) => {
-    if (gameMode === 'online' && playerColor === 'black') {
-      return { x: 7 - displayX, y: 7 - displayY };
-    }
-    return { x: displayX, y: displayY };
-  }, [gameMode, playerColor]);
-
-  // Function to convert actual coordinates to display coordinates
-  const getDisplayCoordinates = useCallback((actualX: number, actualY: number) => {
-    if (gameMode === 'online' && playerColor === 'black') {
-      return { x: 7 - actualX, y: 7 - actualY };
-    }
-    return { x: actualX, y: actualY };
-  }, [gameMode, playerColor]);
-
   const makeAIMove = async () => {
     if (isAIThinking) return;
     
@@ -486,6 +461,31 @@ export function ChessGame({
     const piece = gameState.board[x][y];
     return piece?.type === 'king' && piece.color === gameState.currentPlayer && gameState.isCheck;
   };
+
+  // Function to get board perspective based on player color
+  const getBoardForDisplay = useCallback(() => {
+    if (gameMode === 'online' && playerColor === 'black') {
+      // Flip the board for black player
+      return gameState.board.slice().reverse().map(row => row.slice().reverse());
+    }
+    return gameState.board;
+  }, [gameMode, playerColor, gameState.board]);
+
+  // Function to convert display coordinates to actual board coordinates
+  const getActualCoordinates = useCallback((displayX: number, displayY: number) => {
+    if (gameMode === 'online' && playerColor === 'black') {
+      return { x: 7 - displayX, y: 7 - displayY };
+    }
+    return { x: displayX, y: displayY };
+  }, [gameMode, playerColor]);
+
+  // Function to convert actual coordinates to display coordinates
+  const getDisplayCoordinates = useCallback((actualX: number, actualY: number) => {
+    if (gameMode === 'online' && playerColor === 'black') {
+      return { x: 7 - actualX, y: 7 - actualY };
+    }
+    return { x: actualX, y: actualY };
+  }, [gameMode, playerColor]);
 
   // Update square check functions to work with display coordinates
   const isSquareHighlightedForDisplay = (displayX: number, displayY: number): boolean => {
