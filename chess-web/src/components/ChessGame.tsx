@@ -90,7 +90,7 @@ const TimerDisplay = ({
 };
 
 export function ChessGame({
-  gameState: initialGameState,
+  gameState: externalGameState,
   gameMode = 'local',
   difficulty = 'medium',
   playerColor = 'white',
@@ -135,14 +135,7 @@ export function ChessGame({
     timer: getInitialTimerState(),
   };
 
-  const [gameState, setGameState] = useState<GameState>(initialGameState || initialState);
-  
-  // Update game state when external state changes (for online games)
-  useEffect(() => {
-    if (initialGameState && gameMode === 'online') {
-      setGameState(initialGameState);
-    }
-  }, [initialGameState, gameMode]);
+  const [gameState, setGameState] = useState<GameState>(externalGameState || initialState);
   const [selectedSquare, setSelectedSquare] = useState<Position | null>(null);
   const [legalMoves, setLegalMoves] = useState<Position[]>([]);
   const [hoveredSquare, setHoveredSquare] = useState<Position | null>(null);
@@ -155,6 +148,17 @@ export function ChessGame({
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [hasGameStarted, setHasGameStarted] = useState(false);
+  
+  // Update internal game state when external game state changes
+  useEffect(() => {
+    if (externalGameState && gameMode === 'online') {
+      setGameState(externalGameState);
+      // Extract move notations from move history
+      const notations = externalGameState.moveHistory.map(move => generateMoveNotation(move));
+      setMoveNotations(notations);
+      setHasGameStarted(externalGameState.moveHistory.length > 0);
+    }
+  }, [externalGameState, gameMode]);
   
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -313,8 +317,11 @@ export function ChessGame({
     }
   };
 
-  const handleSquareClick = useCallback(async (position: Position) => {
+  const handleSquareClick = useCallback(async (displayPosition: Position) => {
     if (isAnimating || isAIThinking) return;
+    
+    // Convert display coordinates to actual board coordinates
+    const actualPosition = getActualCoordinates(displayPosition.x, displayPosition.y);
     
     // Online multiplayer turn validation
     if (gameMode === 'online' && gameState.currentPlayer !== playerColor) {
@@ -326,14 +333,14 @@ export function ChessGame({
       return;
     }
 
-    const piece = gameState.board[position.x][position.y];
+    const piece = gameState.board[actualPosition.x][actualPosition.y];
 
     if (selectedSquare) {
       // Try to make a move
-      if (legalMoves.some(move => move.x === position.x && move.y === position.y)) {
+      if (legalMoves.some(move => move.x === actualPosition.x && move.y === actualPosition.y)) {
         const move: Move = {
           from: selectedSquare,
-          to: position,
+          to: actualPosition,
           piece: gameState.board[selectedSquare.x][selectedSquare.y]!,
           capturedPiece: piece || undefined,
         };
@@ -350,12 +357,12 @@ export function ChessGame({
           return; // Can't select opponent's pieces in online mode
         }
         
-      setSelectedSquare(position);
-      const moves = calculateLegalMoves(gameState, position);
-      setLegalMoves(moves);
+        setSelectedSquare(actualPosition);  // Store actual coordinates
+        const moves = calculateLegalMoves(gameState, actualPosition);
+        setLegalMoves(moves);
+      }
     }
-    }
-  }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking]);
+  }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking, getActualCoordinates]);
 
   const handleMove = async (move: Move) => {
     setIsAnimating(true);
@@ -383,10 +390,13 @@ export function ChessGame({
       setLegalMoves([]);
     
       // Send move if online
-    if (gameMode === 'online') {
-        chessSocket.makeMove(move);
-        onMove?.(move);
-    }
+      if (gameMode === 'online') {
+        if (onMove) {
+          onMove(move);
+        } else {
+          chessSocket.makeMove(move);
+        }
+      }
 
       // Check for game end
       if (newGameState.isCheckmate) {
@@ -439,22 +449,59 @@ export function ChessGame({
     setIsTimerPaused(prev => !prev);
   };
 
-  const isSquareHighlighted = (displayRow: number, displayCol: number): boolean => {
-    const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
-    const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
-    return selectedSquare?.x === boardRow && selectedSquare?.y === boardCol;
+  const isSquareHighlighted = (x: number, y: number): boolean => {
+    return selectedSquare?.x === x && selectedSquare?.y === y;
   };
 
-  const isSquareLegalMove = (displayRow: number, displayCol: number): boolean => {
-    const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
-    const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
-    return legalMoves.some(move => move.x === boardRow && move.y === boardCol);
+  const isSquareLegalMove = (x: number, y: number): boolean => {
+    return legalMoves.some(move => move.x === x && move.y === y);
   };
 
-  const isSquareInCheck = (displayRow: number, displayCol: number): boolean => {
-    const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
-    const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
-    const piece = gameState.board[boardRow][boardCol];
+  const isSquareInCheck = (x: number, y: number): boolean => {
+    const piece = gameState.board[x][y];
+    return piece?.type === 'king' && piece.color === gameState.currentPlayer && gameState.isCheck;
+  };
+
+  // Function to get board perspective based on player color
+  const getBoardForDisplay = useCallback(() => {
+    if (gameMode === 'online' && playerColor === 'black') {
+      // Flip the board for black player
+      return gameState.board.slice().reverse().map(row => row.slice().reverse());
+    }
+    return gameState.board;
+  }, [gameMode, playerColor, gameState.board]);
+
+  // Function to convert display coordinates to actual board coordinates
+  const getActualCoordinates = useCallback((displayX: number, displayY: number) => {
+    if (gameMode === 'online' && playerColor === 'black') {
+      return { x: 7 - displayX, y: 7 - displayY };
+    }
+    return { x: displayX, y: displayY };
+  }, [gameMode, playerColor]);
+
+  // Function to convert actual coordinates to display coordinates
+  const getDisplayCoordinates = useCallback((actualX: number, actualY: number) => {
+    if (gameMode === 'online' && playerColor === 'black') {
+      return { x: 7 - actualX, y: 7 - actualY };
+    }
+    return { x: actualX, y: actualY };
+  }, [gameMode, playerColor]);
+
+  // Update square check functions to work with display coordinates
+  const isSquareHighlightedForDisplay = (displayX: number, displayY: number): boolean => {
+    if (!selectedSquare) return false;
+    const displaySelected = getDisplayCoordinates(selectedSquare.x, selectedSquare.y);
+    return displaySelected.x === displayX && displaySelected.y === displayY;
+  };
+
+  const isSquareLegalMoveForDisplay = (displayX: number, displayY: number): boolean => {
+    const actualCoords = getActualCoordinates(displayX, displayY);
+    return legalMoves.some(move => move.x === actualCoords.x && move.y === actualCoords.y);
+  };
+
+  const isSquareInCheckForDisplay = (displayX: number, displayY: number): boolean => {
+    const actualCoords = getActualCoordinates(displayX, displayY);
+    const piece = gameState.board[actualCoords.x][actualCoords.y];
     return piece?.type === 'king' && piece.color === gameState.currentPlayer && gameState.isCheck;
   };
 
@@ -558,36 +605,38 @@ export function ChessGame({
           <div className="relative">
             <div className={`grid grid-cols-8 gap-0 border-4 ${theme.boardBorder} rounded-xl overflow-hidden shadow-2xl ${theme.boardRing}`}>
               {Array.from({ length: 64 }, (_, i) => {
-                const displayRow = Math.floor(i / 8);
-                const displayCol = i % 8;
+                const displayX = Math.floor(i / 8);
+                const displayY = i % 8;
+                const isLight = (displayX + displayY) % 2 === 0;
                 
-                // Convert display coordinates to actual board coordinates
-                const boardRow = playerColor === 'black' ? 7 - displayRow : displayRow;
-                const boardCol = playerColor === 'black' ? 7 - displayCol : displayCol;
+                // Get the piece from the display board
+                const displayBoard = getBoardForDisplay();
+                const piece = displayBoard[displayX][displayY];
                 
-                const isLight = (displayRow + displayCol) % 2 === 0;
-                const piece = gameState.board[boardRow][boardCol];
+                // Get actual coordinates for hover state
+                const actualCoords = getActualCoordinates(displayX, displayY);
+                const isHovered = hoveredSquare?.x === actualCoords.x && hoveredSquare?.y === actualCoords.y;
                 
                 return (
                   <motion.div
-                    key={`${displayRow}-${displayCol}`}
+                    key={`${displayX}-${displayY}`}
                     className={`
                       w-16 h-16 flex items-center justify-center cursor-pointer relative
                       ${isLight ? theme.lightSquare : theme.darkSquare}
-                      ${isSquareHighlighted(displayRow, displayCol) ? 'ring-4 ring-blue-500 ring-inset' : ''}
-                      ${isSquareLegalMove(displayRow, displayCol) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
-                      ${isSquareInCheck(displayRow, displayCol) ? 'ring-4 ring-red-500 ring-inset' : ''}
+                      ${isSquareHighlightedForDisplay(displayX, displayY) ? 'ring-4 ring-blue-500 ring-inset' : ''}
+                      ${isSquareLegalMoveForDisplay(displayX, displayY) ? 'ring-2 ring-emerald-500 ring-inset' : ''}
+                      ${isSquareInCheckForDisplay(displayX, displayY) ? 'ring-4 ring-red-500 ring-inset' : ''}
                       hover:brightness-110 transition-all duration-200
-                      ${hoveredSquare?.x === boardRow && hoveredSquare?.y === boardCol ? 'bg-opacity-80' : ''}
+                      ${isHovered ? 'bg-opacity-80' : ''}
                     `}
-                    onClick={() => handleSquareClick({ x: boardRow, y: boardCol })}
-                    onMouseEnter={() => setHoveredSquare({ x: boardRow, y: boardCol })}
+                    onClick={() => handleSquareClick({ x: displayX, y: displayY })}
+                    onMouseEnter={() => setHoveredSquare(actualCoords)}
                     onMouseLeave={() => setHoveredSquare(null)}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
                     {/* Legal move indicator */}
-                    {isSquareLegalMove(displayRow, displayCol) && (
+                    {isSquareLegalMoveForDisplay(displayX, displayY) && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className={`w-4 h-4 rounded-full ${piece ? 'ring-3 ring-emerald-400 ring-opacity-80' : 'bg-emerald-400/60'}`} />
                       </div>
@@ -597,25 +646,25 @@ export function ChessGame({
                     {piece && (
                       <ChessPiece 
                         piece={piece} 
-                        isHovered={hoveredSquare?.x === boardRow && hoveredSquare?.y === boardCol}
+                        isHovered={isHovered}
                         themeId={themeId}
                       />
                     )}
                     
-                    {/* Coordinate labels */}
-                    {displayRow === 7 && (
+                    {/* Coordinate labels - adjust for board orientation */}
+                    {displayX === 7 && (
                       <div className={`absolute bottom-1 right-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
-                        {playerColor === 'black' 
-                          ? String.fromCharCode(97 + (7 - displayCol))
-                          : String.fromCharCode(97 + displayCol)
+                        {gameMode === 'online' && playerColor === 'black' 
+                          ? String.fromCharCode(104 - displayY) // h-a for flipped board
+                          : String.fromCharCode(97 + displayY) // a-h for normal board
                         }
                       </div>
                     )}
-                    {displayCol === 0 && (
+                    {displayY === 0 && (
                       <div className={`absolute top-1 left-1 text-xs font-bold ${isLight ? theme.coordinateLight : theme.coordinateDark}`}>
-                        {playerColor === 'black' 
-                          ? displayRow + 1
-                          : 8 - displayRow
+                        {gameMode === 'online' && playerColor === 'black' 
+                          ? displayX + 1 // 1-8 for flipped board
+                          : 8 - displayX // 8-1 for normal board
                         }
                       </div>
                     )}

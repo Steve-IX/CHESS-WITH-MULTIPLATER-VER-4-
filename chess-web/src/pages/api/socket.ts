@@ -24,11 +24,9 @@ const rooms = new Map<string, Room>();
 
 // Initialize a proper chess game state
 function createInitialGameState(): GameState {
-  const board = createInitialBoard();
-  
   return {
-    board,
-    currentPlayer: 'white' as PlayerColor,
+    board: createInitialBoard(),
+    currentPlayer: 'white',
     moveHistory: [],
     isCheck: false,
     isCheckmate: false,
@@ -36,7 +34,8 @@ function createInitialGameState(): GameState {
     capturedPieces: { white: [], black: [] },
     enPassantTarget: null,
     halfmoveClock: 0,
-    fullmoveNumber: 1
+    fullmoveNumber: 1,
+    timer: undefined
   };
 }
 
@@ -61,10 +60,12 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       pingTimeout: 60000,
       pingInterval: 25000,
       maxHttpBufferSize: 1e6,
-      connectTimeout: 30000,
+      connectTimeout: 45000,
       serveClient: false,
       httpCompression: false,
-      perMessageDeflate: false
+      perMessageDeflate: false,
+      upgradeTimeout: 10000,
+      allowUpgrades: true
     });
 
     io.on('connection', (socket) => {
@@ -250,50 +251,48 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         }
         
         try {
-          // Apply move to game state using proper chess logic
+          // Apply move using proper chess logic
           const newGameState = makeMove(room.gameState, data.move);
           
-          // Update check status
-          newGameState.isCheck = isInCheck(newGameState, newGameState.currentPlayer);
+          // Check for game over conditions
+          const opponent = newGameState.currentPlayer;
+          const allLegalMoves = getAllLegalMoves(newGameState, opponent);
           
-          // Check for checkmate/stalemate
-          const legalMoves = getAllLegalMoves(newGameState, newGameState.currentPlayer);
-          if (legalMoves.length === 0) {
-            if (newGameState.isCheck) {
+          if (allLegalMoves.length === 0) {
+            if (isInCheck(newGameState, opponent)) {
               newGameState.isCheckmate = true;
-              const winner = newGameState.currentPlayer === 'white' ? 'black' : 'white';
-              
-              // Broadcast game over
+              // Game over - checkmate
               io.to(data.roomId).emit('game-over', {
                 reason: 'checkmate',
-                winner
+                winner: player.color
               });
-              
               room.isGameStarted = false;
-              console.log(`🏁 Checkmate in room ${data.roomId} - ${winner} wins`);
+              console.log(`🏁 Game over in room ${data.roomId} - ${player.color} wins by checkmate`);
             } else {
               newGameState.isStalemate = true;
-              
-              // Broadcast game over
+              // Game over - stalemate
               io.to(data.roomId).emit('game-over', {
                 reason: 'stalemate',
                 winner: 'draw'
               });
-              
               room.isGameStarted = false;
-              console.log(`🏁 Stalemate in room ${data.roomId}`);
+              console.log(`🏁 Game over in room ${data.roomId} - stalemate`);
             }
+          } else {
+            // Check if opponent is in check
+            newGameState.isCheck = isInCheck(newGameState, opponent);
           }
           
+          // Update room state
           room.gameState = newGameState;
           
-          // Broadcast move to all players in room
+          // Broadcast move to all players in room (including the sender for confirmation)
           io.to(data.roomId).emit('move-made', {
             move: data.move,
-            gameState: room.gameState
+            gameState: newGameState
           });
           
-          console.log(`♟️ Move made in room ${data.roomId}:`, data.move);
+          console.log(`♟️ Move made in room ${data.roomId}:`, data.move, `New turn: ${newGameState.currentPlayer}`);
           
         } catch (error) {
           console.error('Invalid move:', error);

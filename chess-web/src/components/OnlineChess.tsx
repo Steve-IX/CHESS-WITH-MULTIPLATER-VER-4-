@@ -156,6 +156,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       }),
 
       chessSocket.onMoveMade((data) => {
+        console.log('Received move update:', data);
         setGameState(data.gameState);
       }),
 
@@ -322,6 +323,17 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     if (!showChat) {
       setUnreadMessages(0);
     }
+  };
+
+  const handleMove = (move: Move) => {
+    // Send move to server
+    chessSocket.makeMove(move);
+    console.log('Move sent to server:', move);
+  };
+
+  const handleGameOver = (result: GameResult) => {
+    console.log('Game over:', result);
+    // Could add additional game over handling here
   };
 
   // Connection status indicator

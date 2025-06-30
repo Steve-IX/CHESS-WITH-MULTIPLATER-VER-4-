@@ -33,7 +33,7 @@ export class ChessSocket {
           path: '/api/socket',
           autoConnect: false,
           transports: ['polling', 'websocket'],
-          timeout: 30000,
+          timeout: 60000,
           forceNew: false,
           upgrade: true,
           rememberUpgrade: true,
@@ -41,7 +41,8 @@ export class ChessSocket {
           reconnectionAttempts: 10,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
-          randomizationFactor: 0.5
+          randomizationFactor: 0.5,
+          closeOnBeforeunload: false
         });
 
         this.setupEventListeners();
@@ -131,7 +132,7 @@ export class ChessSocket {
     });
 
     this.socket.on('move-made', (data: { move: Move, gameState: GameState }) => {
-      console.log('♟️ Move received:', data.move);
+      console.log('♟️ Move received:', data.move, 'New game state:', data.gameState);
       this.emitCallback('move-made', data);
     });
 
