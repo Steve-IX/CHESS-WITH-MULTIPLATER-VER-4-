@@ -18,41 +18,89 @@ export class ChessSocket {
   private roomId: string | null = null;
   private playerColor: PlayerColor | null = null;
   private callbacks: Map<string, Function[]> = new Map();
+  private heartbeatInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Only initialize socket on client side
     if (typeof window !== 'undefined') {
-      // Initialize socket connection - use the API route for production
-      const socketUrl = process.env.NODE_ENV === 'production' 
-        ? window.location.origin 
-        : 'http://localhost:3000';
-      
-      this.socket = io(socketUrl, {
-        path: '/api/socket',
-        autoConnect: false,
-        transports: ['websocket', 'polling']
-      });
+      try {
+        // Initialize socket connection - use the API route for production
+        const socketUrl = process.env.NODE_ENV === 'production' 
+          ? window.location.origin 
+          : 'http://localhost:3000';
+        
+        this.socket = io(socketUrl, {
+          path: '/api/socket',
+          autoConnect: false,
+          transports: ['polling', 'websocket'],
+          timeout: 30000,
+          forceNew: true,
+          upgrade: true,
+          rememberUpgrade: true,
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          randomizationFactor: 0.5,
+          withCredentials: true,
+          extraHeaders: {
+            "Content-Type": "application/json"
+          }
+        });
 
-      this.setupEventListeners();
+        this.setupEventListeners();
+      } catch (error) {
+        console.error('Failed to initialize socket:', error);
+        this.socket = null;
+      }
     }
   }
 
   private setupEventListeners(): void {
-    if (!this.socket) return;
+    if (!this.socket) {
+      console.warn('Cannot setup event listeners: socket is null');
+      return;
+    }
 
     this.socket.on('connect', () => {
       console.log('🔌 Connected to chess server');
+      this.startHeartbeat();
       this.emitCallback('connect');
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('🔌 Disconnected from chess server');
-      this.emitCallback('disconnect');
+    this.socket.on('disconnect', (reason) => {
+      console.log('🔌 Disconnected from chess server:', reason);
+      this.emitCallback('disconnect', reason);
+      
+      // Don't try to reconnect if it was intentional
+      if (reason === 'io client disconnect') {
+        return;
+      }
     });
 
     this.socket.on('connect_error', (error) => {
       console.error('❌ Connection error:', error);
       this.emitCallback('connect_error', error);
+    });
+
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Reconnected to chess server after', attemptNumber, 'attempts');
+      this.emitCallback('reconnect', attemptNumber);
+    });
+
+    this.socket.on('reconnect_attempt', (attemptNumber) => {
+      console.log('🔄 Attempting to reconnect...', attemptNumber);
+      this.emitCallback('reconnect_attempt', attemptNumber);
+    });
+
+    this.socket.on('reconnect_error', (error) => {
+      console.error('❌ Reconnection error:', error);
+      this.emitCallback('reconnect_error', error);
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      console.error('❌ Failed to reconnect after maximum attempts');
+      this.emitCallback('reconnect_failed');
     });
 
     this.socket.on('room-created', (data: { roomId: string, playerColor: PlayerColor }) => {
@@ -115,25 +163,58 @@ export class ChessSocket {
       console.log('💬 Chat message:', data);
       this.emitCallback('chat-message', data);
     });
+
+    this.socket.on('room-updated', (roomState: OnlineGameState) => {
+      console.log('📡 Room state updated:', roomState);
+      this.emitCallback('room-updated', roomState);
+    });
+
+    this.socket.on('player-disconnected', (data: { playerColor: PlayerColor, playerId: string }) => {
+      console.log('⚠️ Player temporarily disconnected:', data);
+      this.emitCallback('player-disconnected', data);
+    });
   }
 
   private emitCallback(event: string, data?: any): void {
-    const callbacks = this.callbacks.get(event) || [];
-    callbacks.forEach(callback => callback(data));
+    const callbacks = this.callbacks.get(event);
+    if (callbacks && Array.isArray(callbacks)) {
+      // Create a copy to avoid issues with concurrent modifications
+      const callbacksCopy = [...callbacks];
+      callbacksCopy.forEach(callback => {
+        try {
+          if (typeof callback === 'function') {
+            callback(data);
+          }
+        } catch (error) {
+          console.error(`Error in callback for event ${event}:`, error);
+        }
+      });
+    }
   }
 
   private addCallback(event: string, callback: Function): void {
+    if (typeof callback !== 'function') {
+      console.warn('Attempted to add non-function callback:', callback);
+      return;
+    }
+    
     if (!this.callbacks.has(event)) {
       this.callbacks.set(event, []);
     }
-    this.callbacks.get(event)!.push(callback);
+    
+    const callbacks = this.callbacks.get(event);
+    if (callbacks && Array.isArray(callbacks)) {
+      callbacks.push(callback);
+    }
   }
 
   private removeCallback(event: string, callback: Function): void {
-    const callbacks = this.callbacks.get(event) || [];
-    const index = callbacks.indexOf(callback);
-    if (index > -1) {
-      callbacks.splice(index, 1);
+    const callbacks = this.callbacks.get(event);
+    if (callbacks && Array.isArray(callbacks)) {
+      const index = callbacks.indexOf(callback);
+      if (index > -1) {
+        callbacks.splice(index, 1);
+      }
     }
   }
 
@@ -149,31 +230,64 @@ export class ChessSocket {
         return;
       }
 
+      let timeout: NodeJS.Timeout;
+      
       const onConnect = () => {
+        clearTimeout(timeout);
         this.removeCallback('connect', onConnect);
         this.removeCallback('connect_error', onError);
+        console.log('✅ Successfully connected to server');
         resolve();
       };
 
       const onError = (error: any) => {
+        clearTimeout(timeout);
         this.removeCallback('connect', onConnect);
         this.removeCallback('connect_error', onError);
+        console.error('❌ Connection failed:', error);
         reject(error);
       };
+
+      // Set a timeout for connection
+      timeout = setTimeout(() => {
+        this.removeCallback('connect', onConnect);
+        this.removeCallback('connect_error', onError);
+        reject(new Error('Connection timeout'));
+      }, 30000);
 
       this.addCallback('connect', onConnect);
       this.addCallback('connect_error', onError);
 
+      console.log('🔄 Attempting to connect to server...');
       this.socket.connect();
     });
   }
 
   disconnect(): void {
     if (this.socket) {
+      this.stopHeartbeat();
       this.socket.disconnect();
       this.roomId = null;
       this.playerColor = null;
       this.isHost = false;
+      // Clear all callbacks to prevent memory leaks
+      this.callbacks.clear();
+    }
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('ping');
+      }
+    }, 30000); // Send ping every 30 seconds
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
     }
   }
 
@@ -358,9 +472,39 @@ export class ChessSocket {
     return () => this.removeCallback('connect', callback);
   }
 
-  onDisconnect(callback: () => void): () => void {
+  onDisconnect(callback: (reason?: string) => void): () => void {
     this.addCallback('disconnect', callback);
     return () => this.removeCallback('disconnect', callback);
+  }
+
+  onReconnect(callback: (attemptNumber: number) => void): () => void {
+    this.addCallback('reconnect', callback);
+    return () => this.removeCallback('reconnect', callback);
+  }
+
+  onReconnectAttempt(callback: (attemptNumber: number) => void): () => void {
+    this.addCallback('reconnect_attempt', callback);
+    return () => this.removeCallback('reconnect_attempt', callback);
+  }
+
+  onReconnectError(callback: (error: any) => void): () => void {
+    this.addCallback('reconnect_error', callback);
+    return () => this.removeCallback('reconnect_error', callback);
+  }
+
+  onReconnectFailed(callback: () => void): () => void {
+    this.addCallback('reconnect_failed', callback);
+    return () => this.removeCallback('reconnect_failed', callback);
+  }
+
+  onRoomUpdated(callback: (roomState: OnlineGameState) => void): () => void {
+    this.addCallback('room-updated', callback);
+    return () => this.removeCallback('room-updated', callback);
+  }
+
+  onPlayerDisconnected(callback: (data: { playerColor: PlayerColor, playerId: string }) => void): () => void {
+    this.addCallback('player-disconnected', callback);
+    return () => this.removeCallback('player-disconnected', callback);
   }
 
   // Getters

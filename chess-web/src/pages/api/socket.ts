@@ -48,23 +48,55 @@ function createInitialGameState(): GameState {
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Set CORS headers for all requests
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   // Type assertion to access the socket server
   const socketRes = res as any;
   
   if (!socketRes.socket.server.io) {
     console.log('🚀 Setting up Chess Socket.IO server...');
     
+    try {
     const io = new ServerIO(socketRes.socket.server, {
       path: '/api/socket',
       addTrailingSlash: false,
       cors: {
         origin: "*",
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+        credentials: true
+      },
+      allowEIO3: true,
+      transports: ['polling', 'websocket'],
+      pingTimeout: 30000,
+      pingInterval: 15000,
+      maxHttpBufferSize: 1e8,
+      connectTimeout: 30000,
+      serveClient: false,
+      perMessageDeflate: {
+        threshold: 2048
+      },
+      httpCompression: {
+        threshold: 2048
       }
     });
 
     io.on('connection', (socket) => {
       console.log('🔌 Client connected:', socket.id);
+
+      // Handle ping for connection keepalive
+      socket.on('ping', () => {
+        socket.emit('pong');
+      });
 
       // Create room
       socket.on('create-room', () => {
@@ -104,6 +136,26 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           return;
         }
         
+        // Check if player is already in the room
+        const existingPlayer = Array.from(room.players.values()).find(p => p.id === socket.id);
+        if (existingPlayer) {
+          console.log(`⚠️ Player ${socket.id} is already in room ${roomId}`);
+          socket.emit('room-joined', { 
+            roomId, 
+            playerColor: existingPlayer.color,
+            gameState: room.gameState ? {
+              roomId,
+              players: Object.fromEntries(
+                Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
+              ),
+              gameState: room.gameState,
+              isGameStarted: room.isGameStarted,
+              spectators: room.spectators
+            } : undefined
+          });
+          return;
+        }
+        
         // Check if room is full (2 players max)
         if (room.players.size >= 2) {
           console.log(`❌ Room ${roomId} is full`);
@@ -124,11 +176,27 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         console.log(`👥 ${socket.id} joined room ${roomId} as ${playerColor}`);
         
-        // Notify the joiner
-        socket.emit('room-joined', { 
-          roomId, 
-          playerColor,
-          gameState: room.gameState ? {
+        // Notify the joiner with a slight delay to ensure proper socket room joining
+        setTimeout(() => {
+          socket.emit('room-joined', { 
+            roomId, 
+            playerColor,
+            gameState: room.gameState ? {
+              roomId,
+              players: Object.fromEntries(
+                Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
+              ),
+              gameState: room.gameState,
+              isGameStarted: room.isGameStarted,
+              spectators: room.spectators
+            } : undefined
+          });
+          
+          // Notify other players about the new joiner
+          socket.to(roomId).emit('player-joined', { playerColor, playerId: socket.id });
+          
+          // Also send complete room state to all players
+          const roomState = {
             roomId,
             players: Object.fromEntries(
               Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
@@ -136,30 +204,33 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             gameState: room.gameState,
             isGameStarted: room.isGameStarted,
             spectators: room.spectators
-          } : undefined
-        });
-        
-        // Notify other players
-        socket.to(roomId).emit('player-joined', { playerColor, playerId: socket.id });
-        
-        // Auto-start game if 2 players
-        if (room.players.size === 2 && !room.isGameStarted) {
-          room.gameState = createInitialGameState();
-          room.isGameStarted = true;
-          
-          const gameState = {
-            roomId,
-            players: Object.fromEntries(
-              Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
-            ),
-            gameState: room.gameState,
-            isGameStarted: true,
-            spectators: room.spectators
           };
           
-          io.to(roomId).emit('game-started', gameState);
-          console.log(`🎮 Game started in room ${roomId}`);
-        }
+          io.to(roomId).emit('room-updated', roomState);
+          console.log(`📡 Room state updated for ${roomId}:`, roomState);
+          
+          // Auto-start game if 2 players with a slight delay to ensure proper synchronization
+          if (room.players.size === 2 && !room.isGameStarted) {
+            setTimeout(() => {
+              console.log(`🎮 Starting game in room ${roomId} with 2 players`);
+              
+              room.gameState = createInitialGameState();
+              room.isGameStarted = true;
+              
+              const gameState = {
+                roomId,
+                players: Object.fromEntries(
+                  Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
+                ),
+                gameState: room.gameState,
+                isGameStarted: true,
+                spectators: room.spectators
+              };
+              
+              io.to(roomId).emit('game-started', gameState);
+            }, 1000); // 1 second delay before starting game
+          }
+        }, 500); // 500ms delay for room joining
       });
 
       // Start game (host only)
@@ -319,8 +390,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       });
 
       // Disconnect
-      socket.on('disconnect', () => {
-        console.log('🔌 Client disconnected:', socket.id);
+      socket.on('disconnect', (reason) => {
+        console.log('🔌 Client disconnected:', socket.id, 'reason:', reason);
+        
+        // Only permanently remove player for clean disconnects, not transport errors
+        const isCleanDisconnect = reason === 'client namespace disconnect' || reason === 'server namespace disconnect';
         
         // Remove player from rooms and notify other players
         for (const [roomId, room] of rooms.entries()) {
@@ -330,31 +404,46 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           for (const [color, player] of room.players.entries()) {
             if (player.id === socket.id) {
               disconnectedPlayerColor = color;
-              room.players.delete(color);
+              
+              if (isCleanDisconnect) {
+                room.players.delete(color);
+                console.log(`👥 Player ${color} (${socket.id}) permanently left room ${roomId}`);
+              } else {
+                console.log(`⚠️ Player ${color} (${socket.id}) temporarily disconnected from room ${roomId}`);
+              }
               break;
             }
           }
           
           if (disconnectedPlayerColor) {
-            // Notify remaining players
-            socket.to(roomId).emit('player-left', {
-              playerColor: disconnectedPlayerColor,
-              playerId: socket.id
-            });
-            
-            // If game was in progress, end it
-            if (room.isGameStarted) {
-              const winner = disconnectedPlayerColor === 'white' ? 'black' : 'white';
-              socket.to(roomId).emit('game-over', {
-                reason: 'disconnect',
-                winner
+            if (isCleanDisconnect) {
+              // Notify remaining players of permanent departure
+              socket.to(roomId).emit('player-left', {
+                playerColor: disconnectedPlayerColor,
+                playerId: socket.id
               });
-            }
+              
+              // If game was in progress, end it
+              if (room.isGameStarted) {
+                const winner = disconnectedPlayerColor === 'white' ? 'black' : 'white';
+                socket.to(roomId).emit('game-over', {
+                  reason: 'opponent left',
+                  winner
+                });
+                console.log(`🏁 Game over in room ${roomId} - ${winner} wins by opponent leaving`);
+              }
             
             // Delete room if empty
-            if (room.players.size === 0) {
+              if (room.players.size === 0) {
               rooms.delete(roomId);
-              console.log(`🗑️ Room ${roomId} deleted (empty)`);
+                console.log(`🗑️ Room ${roomId} deleted (empty)`);
+              }
+            } else {
+              // For transport errors, just notify of temporary disconnection
+              socket.to(roomId).emit('player-disconnected', {
+                playerColor: disconnectedPlayerColor,
+                playerId: socket.id
+              });
             }
             
             break;
@@ -382,9 +471,32 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }, 5 * 60 * 1000); // Check every 5 minutes
 
     socketRes.socket.server.io = io;
+      
+      // Handle Socket.IO upgrade and polling requests
+      io.engine.on("connection_error", (err) => {
+        console.log('Socket.IO connection error:', err);
+      });
+      
+      console.log('✅ Socket.IO server initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize Socket.IO server:', error);
+      res.status(500).json({ error: 'Failed to initialize Socket.IO server' });
+      return;
+    }
   }
 
-  res.end();
+  // Handle the Socket.IO request
+  try {
+    if (socketRes.socket.server.io) {
+      // Let Socket.IO handle the request
+      socketRes.socket.server.io.engine.handleRequest(req, res);
+    } else {
+      res.status(500).json({ error: 'Socket.IO server not available' });
+    }
+  } catch (error) {
+    console.error('❌ Error handling Socket.IO request:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 }
 
 function generateRoomId(): string {

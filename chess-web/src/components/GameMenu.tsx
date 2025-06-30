@@ -102,7 +102,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
           backgroundImage: `linear-gradient(${theme === 'dark' ? '#ffffff' : '#1f2937'} 1px, transparent 1px), linear-gradient(90deg, ${theme === 'dark' ? '#ffffff' : '#1f2937'} 1px, transparent 1px)`,
           backgroundSize: '60px 60px',
         }} />
-
+        
         {/* Large Background Chess Pieces */}
         <motion.div
           className={`absolute top-1/6 left-1/6 text-8xl font-bold ${
@@ -180,7 +180,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         >
           ♞
         </motion.div>
-
+        
         <motion.div
           className={`absolute bottom-1/4 right-1/6 text-6xl font-bold ${
             theme === 'dark' ? 'text-yellow-300/40' : 'text-yellow-600/50'
@@ -359,22 +359,22 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
         </motion.div>
 
         {/* Floating Orbs for Enhanced Atmosphere */}
-        <motion.div
+              <motion.div
           className="absolute top-1/4 left-1/5 w-32 h-32 rounded-full opacity-20"
           style={{
             background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(147, 51, 234, 0.3)' : 'rgba(147, 51, 234, 0.2)'} 0%, transparent 70%)`
           }}
-          animate={{
+                animate={{
             scale: [1, 1.2, 1],
             x: [0, 20, 0],
             y: [0, -15, 0],
-          }}
-          transition={{
+                }}
+                transition={{
             duration: 12,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              />
 
         <motion.div
           className="absolute bottom-1/4 right-1/5 w-24 h-24 rounded-full opacity-20"
@@ -630,7 +630,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
                     ? 'bg-white/10 border-white/30 text-white' 
                     : 'bg-white/80 border-gray-300/50 text-gray-800'
                 } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 max-w-md w-full`}
-              >
+          >
                 <h3 className={`text-2xl font-semibold text-center mb-6 ${
                   theme === 'dark' ? 'text-white' : 'text-gray-800'
                 }`}>
@@ -673,7 +673,7 @@ export function GameMenu({ onGameStart, onThemeSelect, selectedTheme }: GameMenu
 
           </AnimatePresence>
         </div>
-      </div>
+            </div>
     </div>
   );
 }

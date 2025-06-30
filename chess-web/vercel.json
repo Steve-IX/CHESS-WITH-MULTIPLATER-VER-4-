@@ -2,7 +2,8 @@
   "framework": "nextjs",
   "functions": {
     "src/pages/api/socket.ts": {
-      "maxDuration": 300
+      "maxDuration": 300,
+      "memory": 1024
     }
   },
   "rewrites": [
@@ -13,7 +14,7 @@
   ],
   "headers": [
     {
-      "source": "/api/socket",
+      "source": "/api/(.*)",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
@@ -25,9 +26,14 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "X-Requested-With, Content-Type, Authorization"
+          "value": "X-Requested-With, Content-Type, Authorization, Origin, Accept"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
         }
       ]
     }
-  ]
+  ],
+  "regions": ["iad1"]
 } 

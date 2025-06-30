@@ -51,16 +51,23 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     // Only run on client side
     if (typeof window === 'undefined') return;
     
-    const initializeConnection = async () => {
+    const initializeConnection = async (retryCount = 0) => {
       try {
         setConnectionStatus('connecting');
+        setError(null);
         await chessSocket.connect();
         setConnectionStatus('connected');
         setIsConnected(true);
       } catch (error) {
         console.error('Failed to connect:', error);
         setConnectionStatus('disconnected');
-        setError('Failed to connect to server');
+        
+        if (retryCount < 3) {
+          setError(`Connection failed, retrying... (${retryCount + 1}/3)`);
+          setTimeout(() => initializeConnection(retryCount + 1), 2000);
+        } else {
+          setError('Failed to connect to server. Please check your internet connection and try again.');
+        }
       }
     };
 
@@ -74,10 +81,40 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
         setError(null);
       }),
 
-      chessSocket.onDisconnect(() => {
+      chessSocket.onDisconnect((reason) => {
+        console.log('Disconnected:', reason);
         setConnectionStatus('disconnected');
         setIsConnected(false);
-        setError('Disconnected from server');
+        
+        // Only show error for unexpected disconnections
+        if (reason !== 'io client disconnect') {
+          setError('Connection lost, attempting to reconnect...');
+        }
+      }),
+
+      chessSocket.onReconnect((attemptNumber) => {
+        console.log('Reconnected after', attemptNumber, 'attempts');
+        setConnectionStatus('connected');
+        setIsConnected(true);
+        setError(null);
+        addSystemMessage('Connection restored!');
+      }),
+
+      chessSocket.onReconnectAttempt((attemptNumber) => {
+        console.log('Reconnection attempt', attemptNumber);
+        setConnectionStatus('connecting');
+        setError(`Reconnecting... (attempt ${attemptNumber}/5)`);
+      }),
+
+      chessSocket.onReconnectError((error) => {
+        console.error('Reconnection error:', error);
+        setConnectionStatus('disconnected');
+      }),
+
+      chessSocket.onReconnectFailed(() => {
+        console.error('Failed to reconnect');
+        setConnectionStatus('disconnected');
+        setError('Failed to reconnect. Please refresh the page.');
       }),
 
       chessSocket.onRoomCreated((data) => {
@@ -134,42 +171,84 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       }),
 
       chessSocket.onChatMessage((data) => {
-        const newMessage: ChatMessage = {
-          id: Date.now().toString(),
-          playerId: data.playerId,
-          playerColor: data.playerColor,
-          message: data.message,
-          timestamp: new Date()
-        };
-        setChatMessages(prev => [...prev, newMessage]);
-        
-        if (!showChat) {
-          setUnreadMessages(prev => prev + 1);
+        try {
+          if (!data || typeof data.message !== 'string') {
+            console.warn('Invalid chat message data received:', data);
+            return;
+          }
+          
+          const newMessage: ChatMessage = {
+            id: Date.now().toString(),
+            playerId: data.playerId,
+            playerColor: data.playerColor,
+            message: data.message,
+            timestamp: new Date()
+          };
+          
+          setChatMessages(prev => {
+            if (!Array.isArray(prev)) {
+              console.warn('Chat messages state is not an array, resetting');
+              return [newMessage];
+            }
+            return [...prev, newMessage];
+          });
+          
+          if (!showChat) {
+            setUnreadMessages(prev => (typeof prev === 'number' ? prev + 1 : 1));
+          }
+        } catch (error) {
+          console.error('Error handling chat message:', error);
         }
       }),
 
       chessSocket.onError((error) => {
         setError(error);
+      }),
+
+      chessSocket.onRoomUpdated((roomState) => {
+        console.log('Room updated:', roomState);
+        // Update room state to ensure both players are properly synchronized
+        if (roomState.isGameStarted && roomState.gameState) {
+          setGameState(roomState.gameState);
+          setGamePhase('playing');
+          addSystemMessage('Both players connected! Game starting...');
+        }
+      }),
+
+      chessSocket.onPlayerDisconnected((data) => {
+        console.log('Player temporarily disconnected:', data);
+        addSystemMessage(`Opponent temporarily disconnected, waiting for reconnection...`);
       })
     ];
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
-      if (typeof window !== 'undefined') {
+      // Don't disconnect on component unmount unless we're actually leaving the page
+      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
         chessSocket.disconnect();
       }
     };
   }, []);
 
   const addSystemMessage = (message: string) => {
-    const systemMessage: ChatMessage = {
-      id: Date.now().toString(),
-      playerId: 'system',
-      playerColor: 'white',
-      message,
-      timestamp: new Date()
-    };
-    setChatMessages(prev => [...prev, systemMessage]);
+    try {
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        playerId: 'system',
+        playerColor: 'white',
+        message,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => {
+        if (!Array.isArray(prev)) {
+          console.warn('Chat messages state is not an array, resetting');
+          return [systemMessage];
+        }
+        return [...prev, systemMessage];
+      });
+    } catch (error) {
+      console.error('Error adding system message:', error);
+    }
   };
 
   const handleCreateRoom = async () => {
