@@ -345,7 +345,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           
           // Assign player color
           const takenColors = new Set(Array.from(room.players.keys()));
-          const availableColors: PlayerColor[] = ['white', 'black'].filter(color => !takenColors.has(color as PlayerColor));
+          const allColors: PlayerColor[] = ['white', 'black'];
+          const availableColors = allColors.filter(color => !takenColors.has(color));
           
           if (availableColors.length === 0) {
             console.log(`❌ Room ${roomId} has no available colors`);
