@@ -71,23 +71,19 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       addTrailingSlash: false,
       cors: {
         origin: "*",
-        methods: ["GET", "POST", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
-        credentials: true
+        methods: ["GET", "POST"],
+        allowedHeaders: ["*"],
+        credentials: false
       },
       allowEIO3: true,
-      transports: ['polling', 'websocket'],
-      pingTimeout: 30000,
-      pingInterval: 15000,
-      maxHttpBufferSize: 1e8,
-      connectTimeout: 30000,
+      transports: ['polling'],
+      pingTimeout: 120000,
+      pingInterval: 25000,
+      maxHttpBufferSize: 1e6,
+      connectTimeout: 60000,
       serveClient: false,
-      perMessageDeflate: {
-        threshold: 2048
-      },
-      httpCompression: {
-        threshold: 2048
-      }
+      allowUpgrades: false,
+      cookie: false
     });
 
     io.on('connection', (socket) => {
@@ -139,7 +135,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         // Check if player is already in the room
         const existingPlayer = Array.from(room.players.values()).find(p => p.id === socket.id);
         if (existingPlayer) {
-          console.log(`⚠️ Player ${socket.id} is already in room ${roomId}`);
+          console.log(`⚠️ Player ${socket.id} already in room ${roomId}`);
           socket.emit('room-joined', { 
             roomId, 
             playerColor: existingPlayer.color,
@@ -166,6 +162,15 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         // Assign player color (black if white is taken)
         const playerColor: PlayerColor = room.players.has('white') ? 'black' : 'white';
         
+        // Clean up any disconnected players with this color
+        if (room.players.has(playerColor)) {
+          const existingPlayer = room.players.get(playerColor)!;
+          if (!io.sockets.sockets.get(existingPlayer.id)) {
+            console.log(`🧹 Cleaning up disconnected player ${existingPlayer.id}`);
+            room.players.delete(playerColor);
+          }
+        }
+        
         room.players.set(playerColor, {
           id: socket.id,
           color: playerColor,
@@ -176,27 +181,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         console.log(`👥 ${socket.id} joined room ${roomId} as ${playerColor}`);
         
-        // Notify the joiner with a slight delay to ensure proper socket room joining
-        setTimeout(() => {
-          socket.emit('room-joined', { 
-            roomId, 
-            playerColor,
-            gameState: room.gameState ? {
-              roomId,
-              players: Object.fromEntries(
-                Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
-              ),
-              gameState: room.gameState,
-              isGameStarted: room.isGameStarted,
-              spectators: room.spectators
-            } : undefined
-          });
-          
-          // Notify other players about the new joiner
-          socket.to(roomId).emit('player-joined', { playerColor, playerId: socket.id });
-          
-          // Also send complete room state to all players
-          const roomState = {
+        // Notify the joiner
+        socket.emit('room-joined', { 
+          roomId, 
+          playerColor,
+          gameState: room.gameState ? {
             roomId,
             players: Object.fromEntries(
               Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
@@ -204,33 +193,52 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             gameState: room.gameState,
             isGameStarted: room.isGameStarted,
             spectators: room.spectators
+          } : undefined
+        });
+        
+        // Notify other players about the new joiner
+        socket.to(roomId).emit('player-joined', { playerColor, playerId: socket.id });
+        
+        // Also send complete room state to all players
+        const roomState = {
+          roomId,
+          players: Object.fromEntries(
+            Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
+          ),
+          gameState: room.gameState,
+          isGameStarted: room.isGameStarted,
+          spectators: room.spectators
+        };
+        
+        io.to(roomId).emit('room-updated', roomState);
+        console.log(`📡 Room state updated for ${roomId}:`, roomState);
+        
+        // Auto-start game if 2 players with a delay to ensure proper connection
+        if (room.players.size === 2 && !room.isGameStarted) {
+          console.log(`🎮 Starting game in room ${roomId} with 2 players`);
+          
+          room.gameState = createInitialGameState();
+          room.isGameStarted = true;
+          
+          const gameState = {
+            roomId,
+            players: Object.fromEntries(
+              Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
+            ),
+            gameState: room.gameState,
+            isGameStarted: true,
+            spectators: room.spectators
           };
           
-          io.to(roomId).emit('room-updated', roomState);
-          console.log(`📡 Room state updated for ${roomId}:`, roomState);
-          
-          // Auto-start game if 2 players with a slight delay to ensure proper synchronization
-          if (room.players.size === 2 && !room.isGameStarted) {
-            setTimeout(() => {
-              console.log(`🎮 Starting game in room ${roomId} with 2 players`);
-              
-              room.gameState = createInitialGameState();
-              room.isGameStarted = true;
-              
-              const gameState = {
-                roomId,
-                players: Object.fromEntries(
-                  Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
-                ),
-                gameState: room.gameState,
-                isGameStarted: true,
-                spectators: room.spectators
-              };
-              
+          // Increased delay to ensure both players are properly connected
+          setTimeout(() => {
+            if (room.players.size === 2) {  // Double check players are still connected
               io.to(roomId).emit('game-started', gameState);
-            }, 1000); // 1 second delay before starting game
-          }
-        }, 500); // 500ms delay for room joining
+              console.log(`🎮 Game started in room ${roomId} with players:`, 
+                Array.from(room.players.entries()).map(([color, player]) => `${color}: ${player.id}`));
+            }
+          }, 1000);  // Increased delay to 1 second
+        }
       });
 
       // Start game (host only)

@@ -32,19 +32,19 @@ export class ChessSocket {
         this.socket = io(socketUrl, {
           path: '/api/socket',
           autoConnect: false,
-          transports: ['polling', 'websocket'],
-          timeout: 30000,
+          transports: ['polling'],
+          timeout: 60000,
           forceNew: true,
-          upgrade: true,
-          rememberUpgrade: true,
+          upgrade: false,
+          rememberUpgrade: false,
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           randomizationFactor: 0.5,
-          withCredentials: true,
+          withCredentials: false,
           extraHeaders: {
-            "Content-Type": "application/json"
+            "Access-Control-Allow-Origin": "*"
           }
         });
 
