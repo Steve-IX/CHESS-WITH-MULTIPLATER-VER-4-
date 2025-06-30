@@ -307,8 +307,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           if (existingPlayer && existingColor) {
             // Player is rejoining
             console.log(`🔄 Player ${socket.id} rejoining room ${roomId} as ${existingColor}`);
-            existingPlayer.isConnected = true;
-            existingPlayer.lastSeen = new Date();
+            const player = room.players.get(existingColor);
+            if (player) {
+              player.isConnected = true;
+              player.lastSeen = new Date();
+            }
             
             socket.join(roomId);
             playerRooms.set(socket.id, roomId);
@@ -456,8 +459,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           }
           
           // Reconnect the player
-          player.isConnected = true;
-          player.lastSeen = new Date();
+          if (player) {
+            player.isConnected = true;
+            player.lastSeen = new Date();
+          }
           socket.join(roomId);
           playerRooms.set(socket.id, roomId);
           disconnectedPlayers.delete(socket.id);
