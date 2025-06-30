@@ -64,13 +64,7 @@ export class ChessSocket {
         // Additional Vercel-friendly options
         multiplex: true,
         rejectUnauthorized: false,
-        withCredentials: false,
-        // Force polling options
-        polling: {
-          extraHeaders: {
-            'Cache-Control': 'no-cache'
-          }
-        }
+        withCredentials: false
       });
 
       this.setupEventListeners();
