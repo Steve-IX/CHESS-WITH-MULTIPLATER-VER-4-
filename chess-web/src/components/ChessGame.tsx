@@ -580,7 +580,7 @@ export function ChessGame({
                       hover:brightness-110 transition-all duration-200
                       ${hoveredSquare?.x === boardRow && hoveredSquare?.y === boardCol ? 'bg-opacity-80' : ''}
                     `}
-                    onClick={() => handleSquareClick(displayRow, displayCol)}
+                    onClick={() => handleSquareClick({ x: boardRow, y: boardCol })}
                     onMouseEnter={() => setHoveredSquare({ x: boardRow, y: boardCol })}
                     onMouseLeave={() => setHoveredSquare(null)}
                     whileHover={{ scale: 1.02 }}
