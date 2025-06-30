@@ -465,7 +465,7 @@ export function ChessGame({
         const winner = newGameState.currentPlayer === 'white' ? 'black' : 'white';
         onGameOver?.({ winner, reason: 'checkmate' });
       } else if (newGameState.isStalemate) {
-        onGameOver?.({ winner, reason: 'draw' });
+        onGameOver?.({ winner: 'draw', reason: 'stalemate' });
       }
       
     } catch (error) {

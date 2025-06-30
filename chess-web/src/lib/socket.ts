@@ -469,7 +469,7 @@ export class ChessSocket {
     return () => this.removeCallback('game-started', callback);
   }
 
-  onMoveMade(callback: (data: { move: Move, gameState: GameState }) => void): () => void {
+  onMoveMade(callback: (data: { move: Move, gameState: GameState, player?: PlayerColor, timestamp?: number }) => void): () => void {
     this.addCallback('move-made', callback);
     return () => this.removeCallback('move-made', callback);
   }
