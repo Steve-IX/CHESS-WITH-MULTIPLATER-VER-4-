@@ -19,15 +19,12 @@ export class ChessSocket {
   private playerColor: PlayerColor | null = null;
   private callbacks: Map<string, Function[]> = new Map();
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 10;
-  private isReconnecting: boolean = false;
-  private lastPingTime: number = 0;
-  private isPaused: boolean = false;
 
   constructor() {
+    // Only initialize socket on client side
     if (typeof window !== 'undefined') {
       try {
+        // Initialize socket connection - use the API route for production
         const socketUrl = process.env.NODE_ENV === 'production' 
           ? window.location.origin 
           : 'http://localhost:3000';
@@ -35,13 +32,13 @@ export class ChessSocket {
         this.socket = io(socketUrl, {
           path: '/api/socket',
           autoConnect: false,
-          transports: ['websocket', 'polling'],
+          transports: ['polling', 'websocket'],
           timeout: 60000,
           forceNew: false,
           upgrade: true,
           rememberUpgrade: true,
           reconnection: true,
-          reconnectionAttempts: this.maxReconnectAttempts,
+          reconnectionAttempts: 10,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
           randomizationFactor: 0.5,
@@ -64,30 +61,18 @@ export class ChessSocket {
 
     this.socket.on('connect', () => {
       console.log('🔌 Connected to chess server');
-      this.isReconnecting = false;
-      this.reconnectAttempts = 0;
       this.startHeartbeat();
       this.emitCallback('connect');
-
-      // If we were in a room before, try to rejoin
-      if (this.roomId && this.playerColor) {
-        this.socket?.emit('join-room', this.roomId);
-      }
     });
 
     this.socket.on('disconnect', (reason) => {
       console.log('🔌 Disconnected from chess server:', reason);
-      this.stopHeartbeat();
       this.emitCallback('disconnect', reason);
       
-      if (reason === 'io client disconnect' || reason === 'io server disconnect') {
-        this.isReconnecting = false;
+      // Don't try to reconnect if it was intentional
+      if (reason === 'io client disconnect') {
         return;
       }
-
-      // Start reconnection process
-      this.isReconnecting = true;
-      this.emitCallback('reconnecting');
     });
 
     this.socket.on('connect_error', (error) => {
@@ -97,13 +82,11 @@ export class ChessSocket {
 
     this.socket.on('reconnect', (attemptNumber) => {
       console.log('🔄 Reconnected to chess server after', attemptNumber, 'attempts');
-      this.isReconnecting = false;
       this.emitCallback('reconnect', attemptNumber);
     });
 
     this.socket.on('reconnect_attempt', (attemptNumber) => {
       console.log('🔄 Attempting to reconnect...', attemptNumber);
-      this.reconnectAttempts = attemptNumber;
       this.emitCallback('reconnect_attempt', attemptNumber);
     });
 
@@ -114,12 +97,7 @@ export class ChessSocket {
 
     this.socket.on('reconnect_failed', () => {
       console.error('❌ Failed to reconnect after maximum attempts');
-      this.isReconnecting = false;
       this.emitCallback('reconnect_failed');
-    });
-
-    this.socket.on('pong', () => {
-      this.lastPingTime = Date.now();
     });
 
     this.socket.on('room-created', (data: { roomId: string, playerColor: PlayerColor }) => {
@@ -127,7 +105,6 @@ export class ChessSocket {
       this.roomId = data.roomId;
       this.playerColor = data.playerColor;
       this.isHost = true;
-      this.isPaused = false;
       this.emitCallback('room-created', data);
     });
 
@@ -136,7 +113,6 @@ export class ChessSocket {
       this.roomId = data.roomId;
       this.playerColor = data.playerColor;
       this.isHost = false;
-      this.isPaused = false;
       this.emitCallback('room-joined', data);
     });
 
@@ -148,41 +124,6 @@ export class ChessSocket {
     this.socket.on('player-left', (data: { playerColor: PlayerColor, playerId: string }) => {
       console.log('👥 Player left:', data);
       this.emitCallback('player-left', data);
-    });
-
-    this.socket.on('player-reconnected', (data: { playerColor: PlayerColor, playerId: string }) => {
-      console.log('🔄 Player reconnected:', data);
-      if (this.isPaused) {
-        this.isPaused = false;
-        this.emitCallback('game-resumed');
-      }
-      this.emitCallback('player-reconnected', data);
-    });
-
-    this.socket.on('player-disconnected', (data: { playerColor: PlayerColor, playerId: string }) => {
-      console.log('⚠️ Player temporarily disconnected:', data);
-      this.emitCallback('player-disconnected', data);
-    });
-
-    this.socket.on('game-paused', (data: { reason: string, playerColor: PlayerColor }) => {
-      console.log('⏸️ Game paused:', data);
-      this.isPaused = true;
-      this.emitCallback('game-paused', data);
-    });
-
-    this.socket.on('game-resumed', () => {
-      console.log('▶️ Game resumed');
-      this.isPaused = false;
-      this.emitCallback('game-resumed');
-    });
-
-    this.socket.on('room-closed', (data: { reason: string }) => {
-      console.log('🚫 Room closed:', data.reason);
-      this.roomId = null;
-      this.playerColor = null;
-      this.isHost = false;
-      this.isPaused = false;
-      this.emitCallback('room-closed', data);
     });
 
     this.socket.on('game-started', (gameState: OnlineGameState) => {
@@ -223,6 +164,23 @@ export class ChessSocket {
     this.socket.on('room-updated', (roomState: OnlineGameState) => {
       console.log('📡 Room state updated:', roomState);
       this.emitCallback('room-updated', roomState);
+    });
+
+    this.socket.on('player-disconnected', (data: { playerColor: PlayerColor, playerId: string }) => {
+      console.log('⚠️ Player temporarily disconnected:', data);
+      this.emitCallback('player-disconnected', data);
+    });
+
+    // Room rejoined on reconnect
+    this.socket.on('room-rejoined', (data: OnlineGameState) => {
+      console.log('🔄 Room rejoined:', data);
+      this.emitCallback('room-rejoined', data);
+    });
+    
+    // Player rejoined on reconnect
+    this.socket.on('player-rejoined', (data: { playerColor: PlayerColor, playerId: string }) => {
+      console.log('🔄 Player rejoined:', data);
+      this.emitCallback('player-rejoined', data);
     });
   }
 
@@ -327,15 +285,12 @@ export class ChessSocket {
   }
 
   private startHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-    
+    this.stopHeartbeat();
     this.heartbeatInterval = setInterval(() => {
-      if (this.socket?.connected) {
+      if (this.socket && this.socket.connected) {
         this.socket.emit('ping');
       }
-    }, 10000); // 10 seconds
+    }, 30000); // Send ping every 30 seconds
   }
 
   private stopHeartbeat(): void {
@@ -417,6 +372,42 @@ export class ChessSocket {
 
       this.socket.emit('join-room', roomId);
     });
+  }
+
+  // Rejoin room on reconnect: updates socket id and restores room state
+  rejoinRoom(roomId: string, playerColor: PlayerColor): Promise<OnlineGameState> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || !this.socket.connected) {
+        reject(new Error('Socket not connected'));
+        return;
+      }
+      const onRejoined = (data: OnlineGameState) => {
+        cleanup();
+        resolve(data);
+      };
+      const onError = (error: string) => {
+        cleanup();
+        reject(new Error(error));
+      };
+      const cleanup = () => {
+        this.removeCallback('room-rejoined', onRejoined);
+        this.removeCallback('error', onError);
+      };
+      this.addCallback('room-rejoined', onRejoined);
+      this.addCallback('error', onError);
+      this.socket.emit('rejoin-room', { roomId, playerColor });
+    });
+  }
+
+  // Callback registrations for rejoin events
+  onRoomRejoined(callback: (data: OnlineGameState) => void): () => void {
+    this.addCallback('room-rejoined', callback);
+    return () => this.removeCallback('room-rejoined', callback);
+  }
+
+  onPlayerRejoined(callback: (data: { playerColor: PlayerColor; playerId: string }) => void): () => void {
+    this.addCallback('player-rejoined', callback);
+    return () => this.removeCallback('player-rejoined', callback);
   }
 
   // Game actions
@@ -514,7 +505,7 @@ export class ChessSocket {
   onChatMessage(callback: (data: { playerId: string, message: string, playerColor: PlayerColor }) => void): () => void {
     this.addCallback('chat-message', callback);
     return () => this.removeCallback('chat-message', callback);
-  }
+        }
 
   onError(callback: (error: string) => void): () => void {
     this.addCallback('error', callback);
@@ -544,7 +535,7 @@ export class ChessSocket {
   onReconnectError(callback: (error: any) => void): () => void {
     this.addCallback('reconnect_error', callback);
     return () => this.removeCallback('reconnect_error', callback);
-  }
+    }
 
   onReconnectFailed(callback: () => void): () => void {
     this.addCallback('reconnect_failed', callback);
@@ -559,17 +550,7 @@ export class ChessSocket {
   onPlayerDisconnected(callback: (data: { playerColor: PlayerColor, playerId: string }) => void): () => void {
     this.addCallback('player-disconnected', callback);
     return () => this.removeCallback('player-disconnected', callback);
-  }
-
-  onGamePaused(callback: (data: { reason: string, playerColor: PlayerColor }) => void): () => void {
-    this.addCallback('game-paused', callback);
-    return () => this.removeCallback('game-paused', callback);
-  }
-
-  onGameResumed(callback: () => void): () => void {
-    this.addCallback('game-resumed', callback);
-    return () => this.removeCallback('game-resumed', callback);
-  }
+    }
 
   // Getters
   getIsHost(): boolean {
@@ -586,24 +567,6 @@ export class ChessSocket {
 
   isConnected(): boolean {
     return this.socket?.connected || false;
-  }
-
-  getConnectionState(): 'connected' | 'disconnected' | 'reconnecting' {
-    if (!this.socket) return 'disconnected';
-    if (this.isReconnecting) return 'reconnecting';
-    return this.socket.connected ? 'connected' : 'disconnected';
-  }
-
-  getLastPingTime(): number {
-    return this.lastPingTime;
-  }
-
-  isPausedState(): boolean {
-    return this.isPaused;
-  }
-
-  getReconnectAttempts(): number {
-    return this.reconnectAttempts;
   }
 }
 

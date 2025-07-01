@@ -6,7 +6,7 @@ import { ChessGame } from './ChessGame';
 import { chessSocket } from '@/lib/socket';
 import { PlayerColor, GameResult, Move, GameState, ThemeId, TimerMode } from '@/lib/types';
 import { useTheme } from '@/lib/ThemeContext';
-import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, Loader2, Pause } from 'lucide-react';
+import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X } from 'lucide-react';
 
 interface OnlineChessProps {
   onBack: () => void;
@@ -30,7 +30,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   const [isHost, setIsHost] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [joinRoomId, setJoinRoomId] = useState('');
@@ -46,95 +46,209 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
 
   const { theme } = useTheme();
 
-  const [lastPingTime, setLastPingTime] = useState<number>(0);
-  const [reconnectAttempts, setReconnectAttempts] = useState<number>(0);
-  const [isGamePaused, setIsGamePaused] = useState<boolean>(false);
-  const [pauseReason, setPauseReason] = useState<string>('');
-  const [disconnectedPlayer, setDisconnectedPlayer] = useState<PlayerColor | null>(null);
-
+  // Initialize socket connection
   useEffect(() => {
-    const initializeConnection = async () => {
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+    
+    const initializeConnection = async (retryCount = 0) => {
       try {
-        setConnectionStatus('reconnecting');
+        setConnectionStatus('connecting');
+        setError(null);
         await chessSocket.connect();
         setConnectionStatus('connected');
+        setIsConnected(true);
       } catch (error) {
         console.error('Failed to connect:', error);
         setConnectionStatus('disconnected');
-        setError('Failed to connect to game server. Please try again.');
+        
+        if (retryCount < 3) {
+          setError(`Connection failed, retrying... (${retryCount + 1}/3)`);
+          setTimeout(() => initializeConnection(retryCount + 1), 2000);
+        } else {
+          setError('Failed to connect to server. Please check your internet connection and try again.');
+        }
       }
     };
 
     initializeConnection();
 
-    // Set up connection status listeners
-    const onConnect = () => {
-      setConnectionStatus('connected');
-      setError(null);
-    };
-
-    const onDisconnect = (reason?: string) => {
-      setConnectionStatus('disconnected');
-      if (reason && reason !== 'io client disconnect') {
-        setError('Lost connection to game server. Attempting to reconnect...');
-      }
-    };
-
-    const onReconnecting = () => {
-      setConnectionStatus('reconnecting');
-      setError('Reconnecting to game server...');
-    };
-
-    const onReconnectAttempt = (attemptNumber: number) => {
-      setReconnectAttempts(attemptNumber);
-    };
-
-    const onReconnectFailed = () => {
-      setConnectionStatus('disconnected');
-      setError('Failed to reconnect to game server. Please refresh the page.');
-    };
-
-    const onGamePaused = (data: { reason: string, playerColor: PlayerColor }) => {
-      setIsGamePaused(true);
-      setPauseReason(data.reason);
-      setDisconnectedPlayer(data.playerColor);
-    };
-
-    const onGameResumed = () => {
-      setIsGamePaused(false);
-      setPauseReason('');
-      setDisconnectedPlayer(null);
-    };
-
-    // Update connection status periodically
-    const statusInterval = setInterval(() => {
-      setConnectionStatus(chessSocket.getConnectionState());
-      setLastPingTime(chessSocket.getLastPingTime());
-      setReconnectAttempts(chessSocket.getReconnectAttempts());
-      setIsGamePaused(chessSocket.isPausedState());
-    }, 1000);
-
-    // Set up event listeners
+    // Setup event listeners
     const unsubscribers = [
-      chessSocket.onConnect(onConnect),
-      chessSocket.onDisconnect(onDisconnect),
-      chessSocket.onReconnectAttempt(onReconnectAttempt),
-      chessSocket.onReconnectFailed(onReconnectFailed),
-      chessSocket.onGamePaused(onGamePaused),
-      chessSocket.onGameResumed(onGameResumed)
+      chessSocket.onConnect(() => {
+        setConnectionStatus('connected');
+        setIsConnected(true);
+        setError(null);
+      }),
+
+      chessSocket.onDisconnect((reason) => {
+        console.log('Disconnected:', reason);
+        setConnectionStatus('disconnected');
+        setIsConnected(false);
+        
+        // Only show error for unexpected disconnections
+        if (reason !== 'io client disconnect') {
+          setError('Connection lost, attempting to reconnect...');
+        }
+      }),
+
+      chessSocket.onReconnect((attemptNumber) => {
+        console.log('Reconnected after', attemptNumber, 'attempts');
+        setConnectionStatus('connected');
+        setIsConnected(true);
+        setError(null);
+        addSystemMessage('Connection restored!');
+      }),
+
+      chessSocket.onReconnectAttempt((attemptNumber) => {
+        console.log('Reconnection attempt', attemptNumber);
+        setConnectionStatus('connecting');
+        setError(`Reconnecting... (attempt ${attemptNumber}/5)`);
+      }),
+
+      chessSocket.onReconnectError((error) => {
+        console.error('Reconnection error:', error);
+        setConnectionStatus('disconnected');
+      }),
+
+      chessSocket.onReconnectFailed(() => {
+        console.error('Failed to reconnect');
+        setConnectionStatus('disconnected');
+        setError('Failed to reconnect. Please refresh the page.');
+      }),
+
+      chessSocket.onRoomCreated((data) => {
+        setRoomId(data.roomId);
+        setPlayerColor(data.playerColor);
+        setIsHost(true);
+        setGamePhase('waiting');
+        setError(null);
+      }),
+
+      chessSocket.onRoomJoined((data) => {
+        setRoomId(data.roomId);
+        setPlayerColor(data.playerColor);
+        setIsHost(false);
+        setGamePhase('waiting');
+        setError(null);
+        
+        if (data.gameState?.isGameStarted) {
+          setGameState(data.gameState.gameState);
+          setGamePhase('playing');
+        }
+      }),
+
+      chessSocket.onPlayerJoined(() => {
+        addSystemMessage('Opponent joined the game');
+      }),
+
+      chessSocket.onPlayerLeft(() => {
+        addSystemMessage('Opponent left the game');
+        if (gamePhase === 'playing') {
+          setError('Opponent disconnected');
+        }
+      }),
+
+      chessSocket.onGameStarted((onlineGameState) => {
+        setGameState(onlineGameState.gameState);
+        setGamePhase('playing');
+        addSystemMessage('Game started! Good luck!');
+      }),
+
+      chessSocket.onMoveMade((data) => {
+        console.log('Received move update:', data);
+        setGameState(data.gameState);
+      }),
+
+      chessSocket.onGameOver((data) => {
+        let message = '';
+        if (!data.winner || data.winner === 'draw') {
+          message = `Game ended in a ${data.reason}!`;
+        } else {
+          message = `${data.winner === playerColor ? 'You' : 'Opponent'} won by ${data.reason}!`;
+        }
+        addSystemMessage(message);
+        setTimeout(() => setGamePhase('waiting'), 2000);
+      }),
+
+      chessSocket.onChatMessage((data) => {
+        try {
+          if (!data || typeof data.message !== 'string') {
+            console.warn('Invalid chat message data received:', data);
+            return;
+          }
+          
+          const newMessage: ChatMessage = {
+            id: Date.now().toString(),
+            playerId: data.playerId,
+            playerColor: data.playerColor,
+            message: data.message,
+            timestamp: new Date()
+          };
+          
+          setChatMessages(prev => {
+            if (!Array.isArray(prev)) {
+              console.warn('Chat messages state is not an array, resetting');
+              return [newMessage];
+            }
+            return [...prev, newMessage];
+          });
+          
+          if (!showChat) {
+            setUnreadMessages(prev => (typeof prev === 'number' ? prev + 1 : 1));
+          }
+        } catch (error) {
+          console.error('Error handling chat message:', error);
+        }
+      }),
+
+      chessSocket.onError((error) => {
+        setError(error);
+      }),
+
+      chessSocket.onRoomUpdated((roomState) => {
+        console.log('Room updated:', roomState);
+        // Update room state to ensure both players are properly synchronized
+        if (roomState.isGameStarted && roomState.gameState) {
+          setGameState(roomState.gameState);
+          setGamePhase('playing');
+          addSystemMessage('Both players connected! Game starting...');
+        }
+      }),
+
+      chessSocket.onPlayerDisconnected((data) => {
+        console.log('Player temporarily disconnected:', data);
+        addSystemMessage(`Opponent temporarily disconnected, waiting for reconnection...`);
+      })
     ];
 
-    // Cleanup function
     return () => {
-      clearInterval(statusInterval);
-      unsubscribers.forEach(unsub => {
-        if (typeof unsub === 'function') {
-          unsub();
-        }
-      });
-      chessSocket.disconnect();
+      unsubscribers.forEach(unsub => unsub());
+      // Don't disconnect on component unmount unless we're actually leaving the page
+      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+        chessSocket.disconnect();
+      }
     };
   }, []);
+
+  // Rejoin room on reconnect to maintain stable connection
+  useEffect(() => {
+    if (roomId && playerColor) {
+      const unsubscribe = chessSocket.onConnect(() => {
+        chessSocket.rejoinRoom(roomId, playerColor)
+          .then((data) => {
+            if (data.isGameStarted && data.gameState) {
+              setGameState(data.gameState);
+              setGamePhase('playing');
+            } else {
+              setGamePhase('waiting');
+            }
+          })
+          .catch((err) => console.error('Failed to rejoin room:', err));
+      });
+      return () => unsubscribe();
+    }
+  }, [roomId, playerColor]);
 
   const addSystemMessage = (message: string) => {
     try {
@@ -230,84 +344,19 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     }
   };
 
-  // Connection status indicator with more detailed information
-  const ConnectionStatus = () => {
-    const getStatusColor = () => {
-      switch (connectionStatus) {
-        case 'connected':
-          return theme === 'dark' 
-            ? 'bg-green-500/20 text-green-400 border-green-500/30'
-            : 'bg-green-100 text-green-700 border-green-300';
-        case 'reconnecting':
-          return theme === 'dark'
-            ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-            : 'bg-yellow-100 text-yellow-700 border-yellow-300';
-        default:
-          return theme === 'dark'
-            ? 'bg-red-500/20 text-red-400 border-red-500/30'
-            : 'bg-red-100 text-red-700 border-red-300';
-      }
-    };
-
-    const getStatusIcon = () => {
-      switch (connectionStatus) {
-        case 'connected':
-          return <Wifi size={12} />;
-        case 'reconnecting':
-          return <Loader2 size={12} className="animate-spin" />;
-        default:
-          return <WifiOff size={12} />;
-      }
-    };
-
-    const getStatusText = () => {
-      switch (connectionStatus) {
-        case 'connected':
-          return 'Connected';
-        case 'reconnecting':
-          return `Reconnecting (Attempt ${reconnectAttempts})`;
-        default:
-          return 'Disconnected';
-      }
-    };
-
-    return (
-      <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor()}`}>
-        {getStatusIcon()}
-        {getStatusText()}
-      </div>
-    );
-  };
-
-  // Game pause overlay
-  const GamePauseOverlay = () => {
-    if (!isGamePaused) return null;
-
-    return (
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className={`${
-          theme === 'dark' 
-            ? 'bg-white/10 border-white/30 text-white' 
-            : 'bg-white/80 border-gray-300/50 text-gray-800'
-        } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 max-w-md mx-4`}>
-          <div className="text-center">
-            <Pause className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
-            <h3 className="text-2xl font-bold mb-2">Game Paused</h3>
-            <p className="text-lg opacity-80 mb-4">
-              {pauseReason === 'player_disconnected' && disconnectedPlayer
-                ? `Waiting for ${disconnectedPlayer} player to reconnect...`
-                : 'Game has been paused'}
-            </p>
-            {connectionStatus === 'connected' && (
-              <p className="text-sm opacity-60">
-                The game will automatically resume when all players are connected.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Connection status indicator
+  const ConnectionStatus = () => (
+    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
+      connectionStatus === 'connected' 
+        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+        : connectionStatus === 'connecting'
+        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+    }`}>
+      {connectionStatus === 'connected' ? <Wifi size={12} /> : <WifiOff size={12} />}
+      {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+    </div>
+  );
 
   if (gamePhase === 'menu') {
     return (
@@ -318,9 +367,6 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
             ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
             : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
         }`} />
-
-        {/* Game pause overlay */}
-        <GamePauseOverlay />
 
         <div className="relative z-10 w-full max-w-md">
           <motion.div

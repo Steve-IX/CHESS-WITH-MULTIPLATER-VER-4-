@@ -8,8 +8,6 @@ interface Player {
   id: string;
   color: PlayerColor;
   isReady: boolean;
-  lastPing: number;
-  connectionState: 'connected' | 'disconnected' | 'reconnecting';
 }
 
 interface Room {
@@ -20,15 +18,9 @@ interface Room {
   gameState: GameState | null;
   isGameStarted: boolean;
   createdAt: Date;
-  lastActivity: number;
-  isPaused: boolean;
 }
 
 const rooms = new Map<string, Room>();
-const PING_INTERVAL = 10000; // 10 seconds
-const PING_TIMEOUT = 15000;  // 15 seconds
-const ROOM_CLEANUP_INTERVAL = 300000; // 5 minutes
-const INACTIVE_ROOM_TIMEOUT = 3600000; // 1 hour
 
 // Initialize a proper chess game state
 function createInitialGameState(): GameState {
@@ -48,6 +40,7 @@ function createInitialGameState(): GameState {
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Type assertion to access the socket server
   const socketRes = res as any;
   
   if (!socketRes.socket.server.io) {
@@ -63,48 +56,23 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         allowedHeaders: ["Content-Type"]
       },
       allowEIO3: true,
-      transports: ['websocket', 'polling'],
-      pingTimeout: PING_TIMEOUT,
-      pingInterval: PING_INTERVAL,
+      transports: ['polling', 'websocket'],
+      pingTimeout: 60000,
+      pingInterval: 25000,
       maxHttpBufferSize: 1e6,
       connectTimeout: 45000,
       serveClient: false,
-      httpCompression: true,
-      perMessageDeflate: {
-        threshold: 1024
-      },
+      httpCompression: false,
+      perMessageDeflate: false,
       upgradeTimeout: 10000,
       allowUpgrades: true
     });
 
-    // Set up room cleanup interval
-    setInterval(() => {
-      const now = Date.now();
-      for (const [roomId, room] of rooms.entries()) {
-        if (now - room.lastActivity > INACTIVE_ROOM_TIMEOUT) {
-          console.log(`🧹 Cleaning up inactive room ${roomId}`);
-          io.to(roomId).emit('room-closed', { reason: 'inactivity' });
-          rooms.delete(roomId);
-        }
-      }
-    }, ROOM_CLEANUP_INTERVAL);
-
     io.on('connection', (socket) => {
       console.log('🔌 Client connected:', socket.id);
-      let currentRoom: Room | null = null;
 
       // Handle ping for connection keepalive
       socket.on('ping', () => {
-        if (currentRoom) {
-          for (const [color, player] of currentRoom.players.entries()) {
-            if (player.id === socket.id) {
-              player.lastPing = Date.now();
-              player.connectionState = 'connected';
-              break;
-            }
-          }
-          currentRoom.lastActivity = Date.now();
-        }
         socket.emit('pong');
       });
 
@@ -120,29 +88,24 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           spectators: [],
           gameState: null,
           isGameStarted: false,
-          createdAt: new Date(),
-          lastActivity: Date.now(),
-          isPaused: false
+          createdAt: new Date()
         };
         
         room.players.set(playerColor, {
           id: socket.id,
           color: playerColor,
-          isReady: true,
-          lastPing: Date.now(),
-          connectionState: 'connected'
+          isReady: true
         });
         
         rooms.set(roomId, room);
         socket.join(roomId);
-        currentRoom = room;
         
         console.log(`🏠 Room ${roomId} created by ${socket.id} (${playerColor})`);
         socket.emit('room-created', { roomId, playerColor });
       });
 
-      // Join room with retry mechanism
-      socket.on('join-room', async (roomId: string) => {
+      // Join room
+      socket.on('join-room', (roomId: string) => {
         const room = rooms.get(roomId);
         
         if (!room) {
@@ -153,58 +116,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         // Check if room is full (2 players max)
         if (room.players.size >= 2) {
-          // Check if any player is disconnected and handle reconnection
-          let canReconnect = false;
-          let disconnectedColor: PlayerColor | null = null;
-          
-          for (const [color, player] of room.players.entries()) {
-            if (player.connectionState === 'disconnected' && 
-                Date.now() - player.lastPing > PING_TIMEOUT) {
-              disconnectedColor = color;
-              canReconnect = true;
-              break;
-            }
-          }
-          
-          if (!canReconnect) {
-            console.log(`❌ Room ${roomId} is full`);
-            socket.emit('room-full');
-            return;
-          }
-          
-          // Handle reconnection
-          if (disconnectedColor) {
-            const player = room.players.get(disconnectedColor)!;
-            player.id = socket.id;
-            player.connectionState = 'connected';
-            player.lastPing = Date.now();
-            
-            socket.join(roomId);
-            currentRoom = room;
-            
-            console.log(`🔄 ${socket.id} reconnected to room ${roomId} as ${disconnectedColor}`);
-            socket.emit('room-joined', { 
-              roomId, 
-              playerColor: disconnectedColor,
-              gameState: {
-                roomId,
-                players: Object.fromEntries(
-                  Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
-                ),
-                gameState: room.gameState,
-                isGameStarted: room.isGameStarted,
-                spectators: room.spectators
-              }
-            });
-            
-            // Notify other players about the reconnection
-            socket.to(roomId).emit('player-reconnected', { 
-              playerColor: disconnectedColor, 
-              playerId: socket.id 
-            });
-            
-            return;
-          }
+          console.log(`❌ Room ${roomId} is full`);
+          socket.emit('room-full');
+          return;
         }
         
         // Assign player color (black if white is taken)
@@ -213,14 +127,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         room.players.set(playerColor, {
           id: socket.id,
           color: playerColor,
-          isReady: true,
-          lastPing: Date.now(),
-          connectionState: 'connected'
+          isReady: true
         });
         
         socket.join(roomId);
-        currentRoom = room;
-        room.lastActivity = Date.now();
         
         console.log(`👥 ${socket.id} joined room ${roomId} as ${playerColor}`);
         
@@ -242,7 +152,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         // Notify other players about the new joiner
         socket.to(roomId).emit('player-joined', { playerColor, playerId: socket.id });
         
-        // Send complete room state to all players
+        // Also send complete room state to all players
         const roomState = {
           roomId,
           players: Object.fromEntries(
@@ -254,8 +164,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         };
         
         io.to(roomId).emit('room-updated', roomState);
+        console.log(`📡 Room state updated for ${roomId}:`, roomState);
         
-        // Auto-start game if 2 players with a proper delay
+        // Auto-start game if 2 players
         if (room.players.size === 2 && !room.isGameStarted) {
           console.log(`🎮 Starting game in room ${roomId} with 2 players`);
           
@@ -272,45 +183,12 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             spectators: room.spectators
           };
           
-          // Give a proper delay to ensure both players are ready
+          // Give a small delay to ensure both players are properly connected
           setTimeout(() => {
-            if (room.players.size === 2) {  // Double check players are still there
-              io.to(roomId).emit('game-started', gameState);
-              console.log(`🎮 Game started in room ${roomId} with players:`, 
-                Array.from(room.players.entries()).map(([color, player]) => `${color}: ${player.id}`));
-            }
-          }, 1000);
-        }
-      });
-
-      // Handle disconnection
-      socket.on('disconnect', (reason) => {
-        console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}`);
-        
-        if (currentRoom) {
-          for (const [color, player] of currentRoom.players.entries()) {
-            if (player.id === socket.id) {
-              player.connectionState = 'disconnected';
-              player.lastPing = Date.now();
-              
-              // Notify other players
-              socket.to(currentRoom.id).emit('player-disconnected', {
-                playerColor: color,
-                playerId: socket.id
-              });
-              
-              // Pause the game if it was in progress
-              if (currentRoom.isGameStarted && !currentRoom.isPaused) {
-                currentRoom.isPaused = true;
-                io.to(currentRoom.id).emit('game-paused', {
-                  reason: 'player_disconnected',
-                  playerColor: color
-                });
-              }
-              
-              break;
-            }
-          }
+            io.to(roomId).emit('game-started', gameState);
+            console.log(`🎮 Game started in room ${roomId} with players:`, 
+              Array.from(room.players.entries()).map(([color, player]) => `${color}: ${player.id}`));
+          }, 100);
         }
       });
 
@@ -506,10 +384,123 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         socket.to(roomId).emit('draw-declined');
         console.log(`❌ Draw declined in room ${roomId}`);
       });
+
+      // Disconnect
+      socket.on('disconnect', (reason) => {
+        console.log('🔌 Client disconnected:', socket.id, 'reason:', reason);
+        
+        // Only permanently remove player for clean disconnects, not transport errors
+        const isCleanDisconnect = reason === 'client namespace disconnect' || reason === 'server namespace disconnect';
+        
+        // Remove player from rooms and notify other players
+        for (const [roomId, room] of rooms.entries()) {
+          // Check if disconnected player was in this room
+          let disconnectedPlayerColor: PlayerColor | null = null;
+          
+          for (const [color, player] of room.players.entries()) {
+            if (player.id === socket.id) {
+              disconnectedPlayerColor = color;
+              
+              if (isCleanDisconnect) {
+                room.players.delete(color);
+                console.log(`👥 Player ${color} (${socket.id}) permanently left room ${roomId}`);
+              } else {
+                console.log(`⚠️ Player ${color} (${socket.id}) temporarily disconnected from room ${roomId}`);
+              }
+              break;
+            }
+          }
+          
+          if (disconnectedPlayerColor) {
+            if (isCleanDisconnect) {
+              // Notify remaining players of permanent departure
+              socket.to(roomId).emit('player-left', {
+                playerColor: disconnectedPlayerColor,
+                playerId: socket.id
+              });
+              
+              // If game was in progress, end it
+              if (room.isGameStarted) {
+                const winner = disconnectedPlayerColor === 'white' ? 'black' : 'white';
+                socket.to(roomId).emit('game-over', {
+                  reason: 'opponent left',
+                  winner
+                });
+                console.log(`🏁 Game over in room ${roomId} - ${winner} wins by opponent leaving`);
+              }
+            
+            // Delete room if empty
+              if (room.players.size === 0) {
+              rooms.delete(roomId);
+                console.log(`🗑️ Room ${roomId} deleted (empty)`);
+            }
+            } else {
+              // For transport errors, just notify of temporary disconnection
+              socket.to(roomId).emit('player-disconnected', {
+                playerColor: disconnectedPlayerColor,
+                playerId: socket.id
+              });
+            }
+            
+            break;
+          }
+          
+          // Also check spectators
+          const spectatorIndex = room.spectators.indexOf(socket.id);
+          if (spectatorIndex !== -1) {
+            room.spectators.splice(spectatorIndex, 1);
+          }
+        }
+      });
+
+      // Rejoin room on reconnect
+      socket.on('rejoin-room', (data: { roomId: string, playerColor: PlayerColor }) => {
+        const { roomId: reRoomId, playerColor: reColor } = data;
+        const room = rooms.get(reRoomId);
+        if (!room) {
+          socket.emit('room-not-found');
+          return;
+        }
+        const player = room.players.get(reColor);
+        if (!player) {
+          socket.emit('error', 'Not a player in this room');
+          return;
+        }
+        // Update socket ID and rejoin room
+        player.id = socket.id;
+        socket.join(reRoomId);
+        console.log(`🔄 Player ${reColor} rejoined room ${reRoomId} with new socket id ${socket.id}`);
+        // Notify rejoined player
+        socket.emit('room-rejoined', {
+          roomId: reRoomId,
+          playerColor: reColor,
+          gameState: room.gameState,
+          isGameStarted: room.isGameStarted,
+          players: Object.fromEntries(
+            Array.from(room.players.entries()).map(([color, p]) => [color, p.id])
+          ),
+          spectators: room.spectators
+        });
+        // Notify other players of rejoin
+        socket.to(reRoomId).emit('player-rejoined', { playerColor: reColor, playerId: socket.id });
+      });
     });
+
+    // Cleanup old rooms periodically
+    setInterval(() => {
+      const now = new Date();
+      for (const [roomId, room] of rooms.entries()) {
+        const ageInMinutes = (now.getTime() - room.createdAt.getTime()) / (1000 * 60);
+        if (ageInMinutes > 60 && room.players.size === 0) { // Delete empty rooms after 1 hour
+          rooms.delete(roomId);
+          console.log(`🧹 Cleaned up old room ${roomId}`);
+        }
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
 
     socketRes.socket.server.io = io;
   }
+
   res.end();
 }
 
