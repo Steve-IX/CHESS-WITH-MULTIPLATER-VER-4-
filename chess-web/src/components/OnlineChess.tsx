@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChessGame } from './ChessGame';
-import { chessSocket, OnlineGameState } from '@/lib/socket';
+import { chessSocket } from '@/lib/socket';
 import { PlayerColor, GameResult, Move, GameState, ThemeId, TimerMode } from '@/lib/types';
 import { useTheme } from '@/lib/ThemeContext';
-import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, RefreshCw, AlertCircle, Settings } from 'lucide-react';
+import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, Loader2, Pause } from 'lucide-react';
 
 interface OnlineChessProps {
   onBack: () => void;
@@ -24,296 +24,154 @@ interface ChatMessage {
 }
 
 export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: OnlineChessProps) {
-  const { theme } = useTheme();
-  
-  // Connection and Room State
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'reconnecting'>('disconnected');
-  const [isConnected, setIsConnected] = useState(false);
   const [gamePhase, setGamePhase] = useState<'menu' | 'waiting' | 'playing'>('menu');
-  const [isJoining, setIsJoining] = useState(false);
-  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
-  const [joinRoomId, setJoinRoomId] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
-  
-  // Game State
   const [roomId, setRoomId] = useState<string>('');
   const [playerColor, setPlayerColor] = useState<PlayerColor | null>(null);
+  const [isHost, setIsHost] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [isGameStarted, setIsGameStarted] = useState(false);
-  const [isWaitingForOpponent, setIsWaitingForOpponent] = useState(false);
-  const [opponentConnected, setOpponentConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
+  const [error, setError] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinRoomId, setJoinRoomId] = useState('');
   
-  // UI State
-  const [showChat, setShowChat] = useState(false);
-  const [chatInput, setChatInput] = useState('');
+  // Chat functionality
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [showChat, setShowChat] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  
+  // Game actions
   const [showGameMenu, setShowGameMenu] = useState(false);
-  const [showConnectionStatus, setShowConnectionStatus] = useState(true);
 
-  // Initialize connection
+  const { theme } = useTheme();
+
+  const [lastPingTime, setLastPingTime] = useState<number>(0);
+  const [reconnectAttempts, setReconnectAttempts] = useState<number>(0);
+  const [isGamePaused, setIsGamePaused] = useState<boolean>(false);
+  const [pauseReason, setPauseReason] = useState<string>('');
+  const [disconnectedPlayer, setDisconnectedPlayer] = useState<PlayerColor | null>(null);
+
   useEffect(() => {
-    const initializeConnection = async (retryCount = 0) => {
-      if (retryCount > 0) {
-        console.log(`🔄 Connection attempt ${retryCount}`);
-        setConnectionAttempts(retryCount);
-      }
-      
+    const initializeConnection = async () => {
       try {
-        setConnectionStatus('connecting');
-        setError(null);
-        
+        setConnectionStatus('reconnecting');
         await chessSocket.connect();
-        setIsConnected(true);
         setConnectionStatus('connected');
-        setConnectionAttempts(0);
-        console.log('✅ Successfully connected to chess server');
-        
-      } catch (error: any) {
-        console.error('❌ Connection failed:', error.message);
-        setIsConnected(false);
+      } catch (error) {
+        console.error('Failed to connect:', error);
         setConnectionStatus('disconnected');
-        setError(`Connection failed: ${error.message}`);
-        
-        // Retry connection with exponential backoff
-        if (retryCount < 5) {
-          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-          console.log(`⏰ Retrying connection in ${delay}ms...`);
-          setTimeout(() => initializeConnection(retryCount + 1), delay);
-        } else {
-          setError('Failed to connect after multiple attempts. Please check your internet connection.');
-        }
+        setError('Failed to connect to game server. Please try again.');
       }
     };
 
     initializeConnection();
 
-    // Set up event listeners
-    const unsubscribeConnect = chessSocket.onConnect(() => {
-      console.log('🔌 Connected to server');
-      setIsConnected(true);
+    // Set up connection status listeners
+    const onConnect = () => {
       setConnectionStatus('connected');
       setError(null);
-      setConnectionAttempts(0);
-    });
+    };
 
-    const unsubscribeDisconnect = chessSocket.onDisconnect((reason) => {
-      console.log('🔌 Disconnected from server:', reason);
-      setIsConnected(false);
+    const onDisconnect = (reason: string) => {
       setConnectionStatus('disconnected');
       if (reason !== 'io client disconnect') {
-        setError(`Connection lost: ${reason}`);
+        setError('Lost connection to game server. Attempting to reconnect...');
       }
-    });
+    };
 
-    const unsubscribeReconnectAttempt = chessSocket.onReconnectAttempt((attemptNumber) => {
-      console.log('🔄 Reconnection attempt:', attemptNumber);
+    const onReconnecting = () => {
       setConnectionStatus('reconnecting');
-      setConnectionAttempts(attemptNumber);
-    });
+      setError('Reconnecting to game server...');
+    };
 
-    const unsubscribeReconnect = chessSocket.onReconnect((attemptNumber) => {
-      console.log('✅ Reconnected after', attemptNumber, 'attempts');
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      setConnectionAttempts(0);
-      setError(null);
-      addSystemMessage(`Reconnected to server after ${attemptNumber} attempts`);
-    });
+    const onReconnectAttempt = (attemptNumber: number) => {
+      setReconnectAttempts(attemptNumber);
+    };
 
-    const unsubscribeReconnectFailed = chessSocket.onReconnectFailed(() => {
-      console.log('❌ Reconnection failed');
+    const onReconnectFailed = () => {
       setConnectionStatus('disconnected');
-      setError('Connection lost. Attempting to reconnect...');
-      
-      // Try to reinitialize connection
-      setTimeout(() => initializeConnection(), 5000);
-    });
+      setError('Failed to reconnect to game server. Please refresh the page.');
+    };
 
-    const unsubscribeError = chessSocket.onError((error) => {
-      console.error('❌ Socket error:', error);
-      setError(error);
-    });
+    const onGamePaused = (data: { reason: string, playerColor: PlayerColor }) => {
+      setIsGamePaused(true);
+      setPauseReason(data.reason);
+      setDisconnectedPlayer(data.playerColor);
+    };
 
-    // Room events
-    const unsubscribeRoomCreated = chessSocket.onRoomCreated((data) => {
-      console.log('🏠 Room created:', data.roomId);
-      setRoomId(data.roomId);
-      setPlayerColor(data.playerColor);
-      setGamePhase('waiting');
-      setIsWaitingForOpponent(true);
-      setIsCreatingRoom(false);
-      addSystemMessage(`Room ${data.roomId} created. You are playing as ${data.playerColor}. Share this room ID with your opponent!`);
-    });
+    const onGameResumed = () => {
+      setIsGamePaused(false);
+      setPauseReason('');
+      setDisconnectedPlayer(null);
+    };
 
-    const unsubscribeRoomJoined = chessSocket.onRoomJoined((data) => {
-      console.log('🏠 Room joined:', data.roomId);
-      setRoomId(data.roomId);
-      setPlayerColor(data.playerColor);
-      setGamePhase('waiting');
-      setIsJoining(false);
-      
-      if (data.gameState) {
-        setGameState(data.gameState.gameState);
-        setIsGameStarted(data.gameState.isGameStarted);
-        if (data.gameState.isGameStarted) {
-          setGamePhase('playing');
-          setIsWaitingForOpponent(false);
-        }
-      }
-      
-      addSystemMessage(`Joined room ${data.roomId} as ${data.playerColor}`);
-    });
+    // Update connection status periodically
+    const statusInterval = setInterval(() => {
+      setConnectionStatus(chessSocket.getConnectionState());
+      setLastPingTime(chessSocket.getLastPingTime());
+      setReconnectAttempts(chessSocket.getReconnectAttempts());
+      setIsGamePaused(chessSocket.isPausedState());
+    }, 1000);
 
-    const unsubscribePlayerJoined = chessSocket.onPlayerJoined((data) => {
-      console.log('👥 Player joined:', data.playerColor);
-      setOpponentConnected(true);
-      addSystemMessage(`${data.playerColor === playerColor ? 'You' : 'Opponent'} joined the game`);
-    });
+    chessSocket.onConnect(onConnect);
+    chessSocket.onDisconnect(onDisconnect);
+    chessSocket.onReconnectAttempt(onReconnectAttempt);
+    chessSocket.onReconnectFailed(onReconnectFailed);
+    chessSocket.onGamePaused(onGamePaused);
+    chessSocket.onGameResumed(onGameResumed);
 
-    const unsubscribePlayerLeft = chessSocket.onPlayerLeft((data) => {
-      console.log('👥 Player left:', data.playerColor);
-      if (data.playerColor !== playerColor) {
-        setOpponentConnected(false);
-        addSystemMessage('Opponent left the game');
-      }
-    });
-
-    const unsubscribePlayerDisconnected = chessSocket.onPlayerDisconnected((data) => {
-      console.log('⚠️ Player disconnected:', data.playerColor);
-      if (data.playerColor !== playerColor) {
-        addSystemMessage('Opponent disconnected but may reconnect...');
-      }
-    });
-
-    const unsubscribeGameStarted = chessSocket.onGameStarted((gameStateData) => {
-      console.log('🎮 Game started');
-      setGameState(gameStateData.gameState);
-      setIsGameStarted(true);
-      setGamePhase('playing');
-      setIsWaitingForOpponent(false);
-      setOpponentConnected(true);
-      addSystemMessage('Game started! Good luck!');
-    });
-
-    const unsubscribeMoveMade = chessSocket.onMoveMade((data) => {
-      console.log('♟️ Move received');
-      setGameState(data.gameState);
-    });
-
-    const unsubscribeGameOver = chessSocket.onGameOver((data) => {
-      console.log('🏁 Game over:', data);
-      let message = '';
-      if (data.winner === 'draw') {
-        message = `Game ended in a draw (${data.reason})`;
-      } else {
-        const winnerText = data.winner === playerColor ? 'You' : 'Opponent';
-        message = `${winnerText} won by ${data.reason}`;
-      }
-      addSystemMessage(message);
-    });
-
-    const unsubscribeChatMessage = chessSocket.onChatMessage((data) => {
-      const newMessage: ChatMessage = {
-        id: Date.now().toString(),
-        playerId: data.playerId,
-        playerColor: data.playerColor,
-        message: data.message,
-        timestamp: new Date()
-      };
-      
-      setChatMessages(prev => [...prev, newMessage]);
-      
-      if (!showChat && data.playerColor !== playerColor) {
-        setUnreadMessages(prev => prev + 1);
-      }
-    });
-
-    const unsubscribeRoomFull = chessSocket.onError(() => {
-      setError('Room is full');
-      setIsJoining(false);
-    });
-
-    const unsubscribeRoomNotFound = chessSocket.onError(() => {
-      setError('Room not found');
-      setIsJoining(false);
-    });
-
-    // Cleanup
     return () => {
-      unsubscribeConnect();
-      unsubscribeDisconnect();
-      unsubscribeReconnectAttempt();
-      unsubscribeReconnect();
-      unsubscribeReconnectFailed();
-      unsubscribeError();
-      unsubscribeRoomCreated();
-      unsubscribeRoomJoined();
-      unsubscribePlayerJoined();
-      unsubscribePlayerLeft();
-      unsubscribePlayerDisconnected();
-      unsubscribeGameStarted();
-      unsubscribeMoveMade();
-      unsubscribeGameOver();
-      unsubscribeChatMessage();
-      unsubscribeRoomFull();
-      unsubscribeRoomNotFound();
+      clearInterval(statusInterval);
       chessSocket.disconnect();
     };
-  }, [playerColor, showChat]);
+  }, []);
 
   const addSystemMessage = (message: string) => {
-    const systemMessage: ChatMessage = {
-      id: Date.now().toString(),
-      playerId: 'system',
-      playerColor: 'white',
-      message,
-      timestamp: new Date()
-    };
-    setChatMessages(prev => [...prev, systemMessage]);
+    try {
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        playerId: 'system',
+        playerColor: 'white',
+        message,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => {
+        if (!Array.isArray(prev)) {
+          console.warn('Chat messages state is not an array, resetting');
+          return [systemMessage];
+        }
+        return [...prev, systemMessage];
+      });
+    } catch (error) {
+      console.error('Error adding system message:', error);
+    }
   };
 
   const handleCreateRoom = async () => {
-    if (!isConnected) {
-      setError('Not connected to server');
-      return;
-    }
-
-    setIsCreatingRoom(true);
-    setError(null);
+    if (typeof window === 'undefined') return;
     
     try {
-      const data = await chessSocket.createRoom();
-      console.log('✅ Room created successfully:', data.roomId);
+      setError(null);
+      await chessSocket.createRoom();
     } catch (error: any) {
-      console.error('❌ Failed to create room:', error.message);
       setError(error.message);
-      setIsCreatingRoom(false);
     }
   };
 
   const handleJoinRoom = async () => {
-    if (!isConnected) {
-      setError('Not connected to server');
-      return;
-    }
-
-    if (joinRoomId.length !== 6) {
-      setError('Room ID must be 6 characters');
-      return;
-    }
-
-    setIsJoining(true);
-    setError(null);
+    if (typeof window === 'undefined') return;
     
+    if (!joinRoomId.trim()) {
+      setError('Please enter a room ID');
+      return;
+    }
+
     try {
-      const data = await chessSocket.joinRoom(joinRoomId.trim().toUpperCase());
-      console.log('✅ Joined room successfully:', data.roomId);
+      setError(null);
+      await chessSocket.joinRoom(joinRoomId.trim().toUpperCase());
     } catch (error: any) {
-      console.error('❌ Failed to join room:', error.message);
       setError(error.message);
-      setIsJoining(false);
     }
   };
 
@@ -363,28 +221,84 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     }
   };
 
-  // Connection status indicator with enhanced states
-  const ConnectionStatus = () => (
-    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-all duration-300 ${
-      connectionStatus === 'connected' 
-        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-        : connectionStatus === 'connecting'
-        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-        : connectionStatus === 'reconnecting'
-        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-        : 'bg-red-500/20 text-red-400 border border-red-500/30'
-    }`}>
-      {connectionStatus === 'connected' ? (
-        <><Wifi size={12} /> Connected</>
-      ) : connectionStatus === 'connecting' ? (
-        <><RefreshCw size={12} className="animate-spin" /> Connecting...</>
-      ) : connectionStatus === 'reconnecting' ? (
-        <><RefreshCw size={12} className="animate-spin" /> Reconnecting... ({connectionAttempts})</>
-      ) : (
-        <><WifiOff size={12} /> Disconnected</>
-      )}
-    </div>
-  );
+  // Connection status indicator with more detailed information
+  const ConnectionStatus = () => {
+    const getStatusColor = () => {
+      switch (connectionStatus) {
+        case 'connected':
+          return theme === 'dark' 
+            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+            : 'bg-green-100 text-green-700 border-green-300';
+        case 'reconnecting':
+          return theme === 'dark'
+            ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+            : 'bg-yellow-100 text-yellow-700 border-yellow-300';
+        default:
+          return theme === 'dark'
+            ? 'bg-red-500/20 text-red-400 border-red-500/30'
+            : 'bg-red-100 text-red-700 border-red-300';
+      }
+    };
+
+    const getStatusIcon = () => {
+      switch (connectionStatus) {
+        case 'connected':
+          return <Wifi size={12} />;
+        case 'reconnecting':
+          return <Loader2 size={12} className="animate-spin" />;
+        default:
+          return <WifiOff size={12} />;
+      }
+    };
+
+    const getStatusText = () => {
+      switch (connectionStatus) {
+        case 'connected':
+          return 'Connected';
+        case 'reconnecting':
+          return `Reconnecting (Attempt ${reconnectAttempts})`;
+        default:
+          return 'Disconnected';
+      }
+    };
+
+    return (
+      <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor()}`}>
+        {getStatusIcon()}
+        {getStatusText()}
+      </div>
+    );
+  };
+
+  // Game pause overlay
+  const GamePauseOverlay = () => {
+    if (!isGamePaused) return null;
+
+    return (
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className={`${
+          theme === 'dark' 
+            ? 'bg-white/10 border-white/30 text-white' 
+            : 'bg-white/80 border-gray-300/50 text-gray-800'
+        } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 max-w-md mx-4`}>
+          <div className="text-center">
+            <Pause className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
+            <h3 className="text-2xl font-bold mb-2">Game Paused</h3>
+            <p className="text-lg opacity-80 mb-4">
+              {pauseReason === 'player_disconnected' && disconnectedPlayer
+                ? `Waiting for ${disconnectedPlayer} player to reconnect...`
+                : 'Game has been paused'}
+            </p>
+            {connectionStatus === 'connected' && (
+              <p className="text-sm opacity-60">
+                The game will automatically resume when all players are connected.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (gamePhase === 'menu') {
     return (
@@ -395,6 +309,9 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
             ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
             : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
         }`} />
+
+        {/* Game pause overlay */}
+        <GamePauseOverlay />
 
         <div className="relative z-10 w-full max-w-md">
           <motion.div
@@ -421,31 +338,13 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
             </div>
 
             {/* Error message */}
-            <AnimatePresence>
-              {error && (
-                <motion.div 
-                  className="mb-6 p-4 rounded-xl text-sm bg-red-500/20 border border-red-500/30 text-red-300 flex items-center gap-2"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  <AlertCircle size={16} />
-                  {error}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Connection status warning */}
-            {!isConnected && (
+            {error && (
               <motion.div 
-                className="mb-6 p-4 rounded-xl text-sm bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 flex items-center gap-2"
+                className="mb-6 p-4 rounded-xl text-sm bg-red-500/20 border border-red-500/30 text-red-300"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <AlertCircle size={16} />
-                {connectionStatus === 'connecting' || connectionStatus === 'reconnecting' 
-                  ? 'Connecting to server...' 
-                  : 'Not connected to server. Retrying...'}
+                {error}
               </motion.div>
             )}
 
@@ -455,22 +354,19 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
                 <>
                   <motion.button
                     onClick={handleCreateRoom}
-                    disabled={!isConnected || isCreatingRoom}
-                    className={`w-full py-4 px-6 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-                      isConnected && !isCreatingRoom
+                    disabled={!isConnected}
+                    className={`w-full py-4 px-6 rounded-xl font-semibold transition-all duration-300 ${
+                      isConnected
                         ? theme === 'dark'
                           ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30'
                           : 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300'
                         : 'bg-gray-500/20 text-gray-500 border border-gray-500/30 cursor-not-allowed'
                     }`}
-                    whileHover={isConnected && !isCreatingRoom ? { scale: 1.02 } : {}}
-                    whileTap={isConnected && !isCreatingRoom ? { scale: 0.98 } : {}}
+                    whileHover={isConnected ? { scale: 1.02 } : {}}
+                    whileTap={isConnected ? { scale: 0.98 } : {}}
                   >
-                    {isCreatingRoom ? (
-                      <><RefreshCw size={20} className="animate-spin" /> Creating Room...</>
-                    ) : (
-                      <><Crown size={20} /> Create Game Room</>
-                    )}
+                    <Crown size={20} className="inline mr-2" />
+                    Create Game Room
                   </motion.button>
 
                   <motion.button
@@ -503,28 +399,23 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
                         : 'bg-white/80 border-gray-300 text-gray-800 placeholder-gray-500'
                     } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     maxLength={6}
-                    disabled={!isConnected}
                   />
 
                   <div className="flex gap-3">
                     <motion.button
                       onClick={handleJoinRoom}
-                      disabled={!isConnected || joinRoomId.length !== 6 || isJoining}
-                      className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-                        isConnected && joinRoomId.length === 6 && !isJoining
+                      disabled={!isConnected || joinRoomId.length !== 6}
+                      className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
+                        isConnected && joinRoomId.length === 6
                           ? theme === 'dark'
                             ? 'bg-green-500/20 hover:bg-green-500/30 text-green-300 border border-green-500/30'
                             : 'bg-green-100 hover:bg-green-200 text-green-700 border border-green-300'
                           : 'bg-gray-500/20 text-gray-500 border border-gray-500/30 cursor-not-allowed'
                       }`}
-                      whileHover={isConnected && joinRoomId.length === 6 && !isJoining ? { scale: 1.02 } : {}}
-                      whileTap={isConnected && joinRoomId.length === 6 && !isJoining ? { scale: 0.98 } : {}}
+                      whileHover={isConnected && joinRoomId.length === 6 ? { scale: 1.02 } : {}}
+                      whileTap={isConnected && joinRoomId.length === 6 ? { scale: 0.98 } : {}}
                     >
-                      {isJoining ? (
-                        <><RefreshCw size={16} className="animate-spin" /> Joining...</>
-                      ) : (
-                        'Join Room'
-                      )}
+                      Join Room
                     </motion.button>
 
                     <motion.button
@@ -535,8 +426,8 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
                       }}
                       className={`py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
                         theme === 'dark'
-                          ? 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-300 border border-gray-500/30'
-                          : 'bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-400'
+                          ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
                       }`}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
@@ -547,13 +438,12 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
                 </div>
               )}
 
-              {/* Back button */}
               <motion.button
                 onClick={onBack}
                 className={`w-full py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
                   theme === 'dark'
-                    ? 'bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 border border-gray-600/30'
-                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-400'
+                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
                 }`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -579,76 +469,65 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
 
         <div className="relative z-10 w-full max-w-lg">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             className={`${
               theme === 'dark' 
                 ? 'bg-white/10 border-white/30 text-white' 
                 : 'bg-white/80 border-gray-300/50 text-gray-800'
             } backdrop-blur-xl rounded-3xl shadow-2xl border p-8 text-center`}
           >
-            {/* Room Info */}
-            <div className="mb-8">
+            <div className="mb-6">
               <div className="flex items-center justify-center gap-3 mb-4">
-                <Users size={32} className={theme === 'dark' ? 'text-green-400' : 'text-green-600'} />
-                <h2 className="text-2xl font-bold">Room Created</h2>
+                <div className={`w-3 h-3 rounded-full ${isHost ? 'bg-yellow-400' : 'bg-blue-400'} animate-pulse`} />
+                <h2 className="text-2xl font-bold">
+                  {isHost ? 'Waiting for Opponent' : 'Joined Game Room'}
+                </h2>
               </div>
-              
-              <div className="bg-green-500/20 border border-green-500/30 rounded-xl p-4 mb-4">
-                <div className="text-sm text-green-300 mb-2">Room ID</div>
-                <div className="text-3xl font-bold text-green-400 font-mono tracking-wider mb-3">
-                  {roomId}
-                </div>
+              <ConnectionStatus />
+            </div>
+
+            {/* Room info */}
+            <div className="mb-8">
+              <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-xl ${
+                theme === 'dark' ? 'bg-white/10' : 'bg-gray-100'
+              }`}>
+                <span className="text-sm font-medium">Room ID:</span>
+                <span className="text-2xl font-bold tracking-wider">{roomId}</span>
                 <motion.button
                   onClick={copyRoomId}
-                  className="flex items-center justify-center gap-2 mx-auto px-4 py-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-green-300 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  className={`p-2 rounded-lg ${
+                    theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-gray-200'
+                  } transition-colors`}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  title="Copy Room ID"
                 >
                   <Copy size={16} />
-                  Copy Room ID
                 </motion.button>
               </div>
-
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <ConnectionStatus />
-              </div>
-
-              <p className={`text-lg ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>
-                Share this Room ID with your opponent
-              </p>
-              <p className={`text-sm ${theme === 'dark' ? 'text-white/50' : 'text-gray-500'} mt-2`}>
-                You are playing as <span className="font-semibold text-white">{playerColor}</span>
-              </p>
             </div>
 
-            {/* Waiting animation */}
-            <div className="mb-6">
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <div className="animate-pulse w-3 h-3 bg-blue-400 rounded-full"></div>
-                <div className="animate-pulse w-3 h-3 bg-blue-400 rounded-full delay-100"></div>
-                <div className="animate-pulse w-3 h-3 bg-blue-400 rounded-full delay-200"></div>
-              </div>
-              <p className={theme === 'dark' ? 'text-white/70' : 'text-gray-600'}>
-                Waiting for opponent to join...
-              </p>
-            </div>
+            {/* Instructions */}
+            <p className={`text-sm mb-6 ${theme === 'dark' ? 'text-white/70' : 'text-gray-600'}`}>
+              {isHost 
+                ? 'Share the Room ID with your friend to start playing!'
+                : 'Waiting for the game to start...'
+              }
+            </p>
 
-            {/* Back to menu */}
+            {/* Back button */}
             <motion.button
-              onClick={() => {
-                chessSocket.disconnect();
-                onBack();
-              }}
+              onClick={onBack}
               className={`w-full py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
                 theme === 'dark'
-                  ? 'bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 border border-gray-600/30'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-400'
+                  ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
               }`}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              Cancel & Return to Menu
+              ← Leave Room
             </motion.button>
           </motion.div>
         </div>
@@ -658,35 +537,74 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
 
   // Playing phase
   return (
-    <div className="relative">
-      {/* Connection status overlay */}
-      <AnimatePresence>
-        {!isConnected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
-          >
-            <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 text-center text-white border border-white/20">
-              <RefreshCw size={32} className="animate-spin mx-auto mb-4 text-yellow-400" />
-              <h3 className="text-xl font-bold mb-2">Connection Lost</h3>
-              <p className="text-white/70 mb-4">
-                {connectionStatus === 'reconnecting' 
-                  ? `Reconnecting... (attempt ${connectionAttempts})`
-                  : 'Attempting to reconnect...'}
-              </p>
-              <ConnectionStatus />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="min-h-screen relative">
+      {/* Game header */}
+      <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between">
+        <motion.button
+          onClick={onBack}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            theme === 'dark'
+              ? 'bg-black/20 hover:bg-black/40 text-white border border-white/30'
+              : 'bg-white/80 hover:bg-white text-gray-800 border border-gray-300'
+          } backdrop-blur-sm`}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          ← Leave Game
+        </motion.button>
 
-      {/* Game interface */}
+        <div className="flex items-center gap-4">
+          <ConnectionStatus />
+          
+          {/* Room info */}
+          <div className={`px-3 py-1 rounded-lg text-sm font-medium ${
+            theme === 'dark'
+              ? 'bg-black/20 text-white border border-white/30'
+              : 'bg-white/80 text-gray-800 border border-gray-300'
+          } backdrop-blur-sm`}>
+            Room: {roomId}
+          </div>
+
+          {/* Chat toggle */}
+          <motion.button
+            onClick={toggleChat}
+            className={`relative p-2 rounded-lg transition-colors ${
+              theme === 'dark'
+                ? 'bg-black/20 hover:bg-black/40 text-white border border-white/30'
+                : 'bg-white/80 hover:bg-white text-gray-800 border border-gray-300'
+            } backdrop-blur-sm`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <MessageCircle size={20} />
+            {unreadMessages > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                {unreadMessages}
+              </div>
+            )}
+          </motion.button>
+
+          {/* Game menu */}
+          <motion.button
+            onClick={() => setShowGameMenu(true)}
+            className={`p-2 rounded-lg transition-colors ${
+              theme === 'dark'
+                ? 'bg-black/20 hover:bg-black/40 text-white border border-white/30'
+                : 'bg-white/80 hover:bg-white text-gray-800 border border-gray-300'
+            } backdrop-blur-sm`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            ⋮
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Chess game */}
       {gameState && (
         <ChessGame
-          gameState={gameState}
           gameMode="online"
+          gameState={gameState}
           playerColor={playerColor || 'white'}
           themeId={selectedTheme}
           timerMode={timerMode}
@@ -696,105 +614,67 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
         />
       )}
 
-      {/* Floating action buttons */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-40">
-        {/* Chat button */}
-        <motion.button
-          onClick={toggleChat}
-          className={`relative p-4 rounded-full shadow-lg backdrop-blur-xl border transition-all duration-300 ${
-            theme === 'dark'
-              ? 'bg-white/10 border-white/30 text-white hover:bg-white/20'
-              : 'bg-white/80 border-gray-300/50 text-gray-800 hover:bg-white'
-          }`}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-        >
-          <MessageCircle size={24} />
-          {unreadMessages > 0 && (
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-              {unreadMessages}
-            </span>
-          )}
-        </motion.button>
-
-        {/* Game menu button */}
-        <motion.button
-          onClick={() => setShowGameMenu(true)}
-          className={`p-4 rounded-full shadow-lg backdrop-blur-xl border transition-all duration-300 ${
-            theme === 'dark'
-              ? 'bg-white/10 border-white/30 text-white hover:bg-white/20'
-              : 'bg-white/80 border-gray-300/50 text-gray-800 hover:bg-white'
-          }`}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-        >
-          <Settings size={24} />
-        </motion.button>
-      </div>
-
-      {/* Chat panel */}
+      {/* Chat sidebar */}
       <AnimatePresence>
         {showChat && (
           <motion.div
-            initial={{ x: 300, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 300, opacity: 0 }}
-            className="fixed right-6 top-6 bottom-6 w-80 z-30"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            className={`fixed top-0 right-0 h-full w-80 z-30 ${
+              theme === 'dark'
+                ? 'bg-black/80 border-white/30'
+                : 'bg-white/90 border-gray-300'
+            } border-l backdrop-blur-xl`}
           >
-            <div className={`h-full ${
-              theme === 'dark' 
-                ? 'bg-white/10 border-white/30 text-white' 
-                : 'bg-white/90 border-gray-300/50 text-gray-800'
-            } backdrop-blur-xl rounded-2xl shadow-2xl border flex flex-col`}>
+            <div className="flex flex-col h-full">
               {/* Chat header */}
-              <div className="p-4 border-b border-white/20 flex items-center justify-between">
-                <h3 className="font-bold flex items-center gap-2">
-                  <MessageCircle size={20} />
-                  Chat
-                </h3>
-                <button
-                  onClick={() => setShowChat(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
+              <div className="flex items-center justify-between p-4 border-b border-current/20">
+                <h3 className="font-semibold">Game Chat</h3>
+                <motion.button
+                  onClick={toggleChat}
+                  className="p-1 rounded hover:bg-current/10"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                 >
-                  ×
-                </button>
+                  <X size={20} />
+                </motion.button>
               </div>
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {chatMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`${
-                      message.playerId === 'system'
-                        ? 'text-center text-xs text-gray-400 italic'
-                        : message.playerColor === playerColor
-                          ? 'text-right'
-                          : 'text-left'
-                    }`}
-                  >
-                    {message.playerId !== 'system' && (
-                      <div className={`text-xs ${
-                        message.playerColor === 'white' ? 'text-blue-400' : 'text-purple-400'
-                      } mb-1`}>
-                        {message.playerColor === playerColor ? 'You' : 'Opponent'}
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className={`${
+                    msg.playerId === 'system' ? 'text-center' : ''
+                  }`}>
+                    {msg.playerId === 'system' ? (
+                      <div className="text-sm text-gray-500 italic">
+                        {msg.message}
+                      </div>
+                    ) : (
+                      <div className={`${
+                        msg.playerColor === playerColor ? 'text-right' : 'text-left'
+                      }`}>
+                        <div className={`inline-block max-w-[80%] p-3 rounded-xl ${
+                          msg.playerColor === playerColor
+                            ? 'bg-blue-500 text-white'
+                            : theme === 'dark'
+                            ? 'bg-white/10 text-white'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          <div className="text-sm">{msg.message}</div>
+                          <div className="text-xs opacity-70 mt-1">
+                            {msg.timestamp.toLocaleTimeString()}
+                          </div>
+                        </div>
                       </div>
                     )}
-                    <div className={`${
-                      message.playerId === 'system'
-                        ? ''
-                        : message.playerColor === playerColor
-                          ? 'bg-blue-500/20 text-blue-100 ml-8'
-                          : 'bg-gray-500/20 text-gray-100 mr-8'
-                    } p-2 rounded-lg text-sm`}>
-                      {message.message}
-                    </div>
                   </div>
                 ))}
               </div>
 
               {/* Chat input */}
-              <div className="p-4 border-t border-white/20">
+              <div className="p-4 border-t border-current/20">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -805,17 +685,22 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
                     className={`flex-1 p-2 rounded-lg border ${
                       theme === 'dark'
                         ? 'bg-white/10 border-white/30 text-white placeholder-white/50'
-                        : 'bg-white/80 border-gray-300 text-gray-800 placeholder-gray-500'
+                        : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
                     } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                    maxLength={500}
                   />
-                  <button
+                  <motion.button
                     onClick={handleSendMessage}
                     disabled={!chatInput.trim()}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                    className={`p-2 rounded-lg ${
+                      chatInput.trim()
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    } transition-colors`}
+                    whileHover={chatInput.trim() ? { scale: 1.05 } : {}}
+                    whileTap={chatInput.trim() ? { scale: 0.95 } : {}}
                   >
-                    Send
-                  </button>
+                    <Send size={16} />
+                  </motion.button>
                 </div>
               </div>
             </div>
@@ -823,7 +708,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
         )}
       </AnimatePresence>
 
-      {/* Game menu */}
+      {/* Game menu modal */}
       <AnimatePresence>
         {showGameMenu && (
           <motion.div
@@ -838,32 +723,32 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               className={`${
-                theme === 'dark' 
-                  ? 'bg-white/10 border-white/30 text-white' 
-                  : 'bg-white/90 border-gray-300/50 text-gray-800'
-              } backdrop-blur-xl rounded-2xl shadow-2xl border p-6 max-w-sm w-full`}
+                theme === 'dark'
+                  ? 'bg-black/80 border-white/30 text-white'
+                  : 'bg-white border-gray-300 text-gray-800'
+              } rounded-2xl border backdrop-blur-xl p-6 w-full max-w-sm`}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-xl font-bold mb-6 text-center">Game Options</h3>
+              <h3 className="text-xl font-bold mb-6 text-center">Game Menu</h3>
               
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <motion.button
                   onClick={handleOfferDraw}
-                  className={`w-full py-3 px-4 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
+                  className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
                     theme === 'dark'
-                      ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 border border-yellow-500/30'
-                      : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300'
+                      ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30'
+                      : 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300'
                   }`}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <Handshake size={20} />
+                  <Handshake size={16} className="inline mr-2" />
                   Offer Draw
                 </motion.button>
 
                 <motion.button
                   onClick={handleResign}
-                  className={`w-full py-3 px-4 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
+                  className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
                     theme === 'dark'
                       ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30'
                       : 'bg-red-100 hover:bg-red-200 text-red-700 border border-red-300'
@@ -871,16 +756,16 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <Flag size={20} />
+                  <Flag size={16} className="inline mr-2" />
                   Resign
                 </motion.button>
 
                 <motion.button
                   onClick={() => setShowGameMenu(false)}
-                  className={`w-full py-3 px-4 rounded-xl font-semibold transition-all duration-300 ${
+                  className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
                     theme === 'dark'
-                      ? 'bg-gray-600/20 hover:bg-gray-600/30 text-gray-300 border border-gray-600/30'
-                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700 border border-gray-400'
+                      ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
                   }`}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
