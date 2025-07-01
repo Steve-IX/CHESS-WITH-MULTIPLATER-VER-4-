@@ -1,1 +1,10 @@
- 
+services:
+  - type: web
+    name: chess-server
+    env: node
+    rootDir: chess-web
+    plan: free
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm start"
+    branch: main
+    autoDeploy: true 
