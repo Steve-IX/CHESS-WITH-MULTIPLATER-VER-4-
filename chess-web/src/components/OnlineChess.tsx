@@ -932,8 +932,8 @@ const GameOverModal = ({
     message = `Better luck next time! You lost by ${result.reason}.`;
   }
 
-  const hasOpponentOfferedRematch = rematchOffer && rematchOffer.from !== playerColor;
-  const haveYouOfferedRematch = rematchOffer && rematchOffer.from === playerColor;
+  const hasOpponentOfferedRematch = !!(rematchOffer && rematchOffer.from !== playerColor);
+  const haveYouOfferedRematch = !!(rematchOffer && rematchOffer.from === playerColor);
 
   return (
     <motion.div
