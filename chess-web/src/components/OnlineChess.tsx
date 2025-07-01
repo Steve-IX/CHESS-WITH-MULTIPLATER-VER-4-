@@ -114,15 +114,24 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       setIsGamePaused(chessSocket.isPausedState());
     }, 1000);
 
-    chessSocket.onConnect(onConnect);
-    chessSocket.onDisconnect(onDisconnect);
-    chessSocket.onReconnectAttempt(onReconnectAttempt);
-    chessSocket.onReconnectFailed(onReconnectFailed);
-    chessSocket.onGamePaused(onGamePaused);
-    chessSocket.onGameResumed(onGameResumed);
+    // Set up event listeners
+    const unsubscribers = [
+      chessSocket.onConnect(onConnect),
+      chessSocket.onDisconnect(onDisconnect),
+      chessSocket.onReconnectAttempt(onReconnectAttempt),
+      chessSocket.onReconnectFailed(onReconnectFailed),
+      chessSocket.onGamePaused(onGamePaused),
+      chessSocket.onGameResumed(onGameResumed)
+    ];
 
+    // Cleanup function
     return () => {
       clearInterval(statusInterval);
+      unsubscribers.forEach(unsub => {
+        if (typeof unsub === 'function') {
+          unsub();
+        }
+      });
       chessSocket.disconnect();
     };
   }, []);
