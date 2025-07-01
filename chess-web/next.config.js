@@ -1,5 +1,3 @@
-const path = require('path');
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -8,7 +6,6 @@ const nextConfig = {
     serverComponentsExternalPackages: ['socket.io'],
   },
   webpack: (config) => {
-    config.resolve.alias['@'] = path.resolve(__dirname, 'src');
     config.resolve.fallback = {
       ...config.resolve.fallback,
       net: false,
