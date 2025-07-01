@@ -1,111 +1,122 @@
-# Chess With Multiplayer Ver 4
+# ♟️ Real-Time Multiplayer Chess
 
-This project is a chess application that supports multiple play modes, implemented in both Java Swing and Next.js. The Java version allows you to host or connect to a friend over the network, play locally on the same machine, or select the upcoming computer opponent mode. The Next.js version provides a modern web interface for playing chess online.
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live_Demo-black?style=for-the-badge&logo=vercel)](https://chess-with-multiplater-ver-4.vercel.app/)
+[![Render Deployment](https://img.shields.io/badge/Render-Live_Demo-46E3B7?style=for-the-badge&logo=render)](https://chess-server-qrmt.onrender.com)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repo-blue?style=for-the-badge&logo=github)](https://github.com/Steve-IX/CHESS-WITH-MULTIPLATER-VER-4-)
 
-## Java Version Features
+A feature-rich, real-time multiplayer chess application built with a modern technology stack. Challenge your friends to a classic game of chess through a sleek, responsive web interface, complete with in-game chat, a music player, and customizable themes.
 
-- **Three opponent modes**
-  - *Computer* – placeholder for future AI opponent.
-  - *Local Friend* – hot-seat play on the same computer.
-  - *Global Friend* – play with someone over the internet or LAN using a simple networking layer.
-- **Full chess rules** including castling, en passant, pawn promotion, check, checkmate and stalemate detection.
-- **Board orientation** automatically flips when you are the connecting player so you see the board from the black side.
-- **Move highlights** and indicators for the king in check.
-- **Piece graphics** loaded from the `images/` directory.
+---
 
-### Java Getting Started
+### ▶️ Live Demo
 
-1. Ensure a JDK (Java 8 or later) is installed.
-2. Compile the source files:
+-   **Vercel (Frontend):** [https://chess-with-multiplater-ver-4.vercel.app/](https://chess-with-multiplater-ver-4.vercel.app/)
+-   **Render (Backend Server):** [https://chess-server-qrmt.onrender.com](https://chess-server-qrmt.onrender.com)
 
-   ```sh
-   javac ChessMain.java
-   ```
+*(Note: The Render free instance may spin down with inactivity, causing a 30-50 second delay on the first connection.)*
 
-3. Run the application:
+---
 
-   ```sh
-   java ChessMain
-   ```
+## ✨ Features
 
-4. Choose your opponent type when prompted. For "Global Friend" one player selects **Host** and provides a port (default 5000) while the other selects **Connect** and enters the host's IP and the same port.
+-   **Real-Time Multiplayer:** Play against friends or others online in real-time.
+-   **Game Rooms:** Easily create a new game room and share the unique ID with your opponent to join.
+-   **Full Chess Logic:** Adheres to all standard chess rules, including pawn promotion, en passant, castling, check, and checkmate detection.
+-   **Interactive UI:** A smooth, intuitive, and responsive board with drag-and-drop piece movement.
+-   **In-Game Chat:** Communicate with your opponent directly within the game interface.
+-   **Game Controls:** Offer or accept draws, resign when the game is lost, or offer a rematch to play again.
+-   **Spectator Mode:** Join existing games as a spectator to watch the action unfold.
+-   **Theming:** Customize your game's appearance with a selection of beautiful themes.
+-   **Music Player:** Enjoy a curated playlist of background music while you play.
 
-### Java Repository Layout
+## 🛠️ Built With
 
-- `ChessMain.java` – main GUI class and game logic implementation.
-- `NetworkManager.java` / `GlobalNetwork.java` – simple networking utilities for multiplayer modes.
-- `OpponentChooser.java` – dialog helper to select the opponent type.
-- `images/` – PNG assets for chess pieces.
-- `git-auto.ps1` / `git-auto.bat` – automated git workflow scripts.
+The project leverages a modern, full-stack TypeScript environment:
 
-## Next.js Version
+-   **Framework:** [Next.js](https://nextjs.org/) (React)
+-   **Real-Time Engine:** [Socket.IO](https://socket.io/)
+-   **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+-   **Language:** [TypeScript](https://www.typescriptlang.org/)
+-   **Deployment:**
+    -   [Vercel](https://vercel.com/) for the frontend application.
+    -   [Render](https://render.com/) for the backend WebSocket server.
 
-The Next.js version provides a modern web interface for playing chess online. It's built with Next.js 14 and includes real-time multiplayer functionality.
+## 🚀 Getting Started
 
-### Next.js Getting Started
+To get a local copy up and running, follow these simple steps.
 
-First, run the development server:
+### Prerequisites
 
-```bash
-cd chess-web
-npm install
-npm run dev
-```
+Make sure you have Node.js and npm installed on your machine.
+*   [Node.js](https://nodejs.org/en/download/) (v18.x or later recommended)
+*   npm (comes with Node.js)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation & Setup
 
-### Next.js Features
+1.  **Clone the repository:**
+    ```sh
+    git clone https://github.com/Steve-IX/CHESS-WITH-MULTIPLATER-VER-4-.git
+    ```
+2.  **Navigate to the web directory:**
+    ```sh
+    cd CHESS-WITH-MULTIPLATER-VER-4-/chess-web
+    ```
+3.  **Install NPM packages:**
+    ```sh
+    npm install
+    ```
+4.  **Run the development server:**
+    ```sh
+    npm run dev
+    ```
+5.  Open [http://localhost:3000](http://localhost:3000) in your browser to see the application. The frontend and the Socket.IO server will run on the same development server.
 
-- Modern, responsive UI built with Tailwind CSS
-- Real-time multiplayer functionality
-- Beautiful animations using Framer Motion
-- Full chess rules implementation
-- Game state management
-- Piece movement validation
-- Captured pieces display
-- Turn indicators
-- Check and checkmate detection
+## ☁️ Deployment
 
-### Next.js Repository Layout
+This application is deployed using a dual-platform approach to separate the web client from the stateful WebSocket server.
 
-The Next.js version is located in the `chess-web` directory and follows the standard Next.js project structure:
+-   **Vercel:** Hosts the static Next.js frontend. It's configured to point its "Root Directory" to `chess-web` in the project settings.
+-   **Render:** Runs the Next.js application as a "Web Service," serving as the dedicated Socket.IO backend. The deployment is managed by the `render.yaml` file in the root of the repository.
 
-- `src/components/` – React components including the chess game
-- `src/lib/` – Chess game logic and utilities
-- `src/app/` – Next.js app router pages
-- `public/` – Static assets
+### Environment Variables
 
-## Git Automation
+For the deployed Vercel frontend to connect to the Render backend, the following environment variable must be set in the Vercel project settings:
 
-This project includes automated git workflow scripts for easy development:
+-   `NEXT_PUBLIC_SOCKET_URL`: The URL of the Render web service (e.g., `https://chess-server-qrmt.onrender.com`).
 
-### Quick Push (Recommended)
-```bash
-# Using the batch file (simplest)
-git-auto.bat "Your commit message here"
+## 📜 Project Development Journey
 
-# Or without a message (auto-generated timestamp)
-git-auto.bat
-```
+This project's path from development to a stable, dual-platform deployment involved several key challenges and learning opportunities:
 
-### PowerShell Script
-```powershell
-# Using PowerShell directly
-powershell -ExecutionPolicy Bypass -File git-auto.ps1 -CommitMessage "Your message"
-```
+1.  **Initial Deployment:** The first goal was to deploy the Next.js application to a single platform. Render was chosen, and a `render.yaml` was configured.
+2.  **Render Build Failures:** Early builds on Render failed due to missing production dependencies (`devDependencies` vs. `dependencies`) and an inability to resolve TypeScript path aliases (`@/components/...`). This was fixed by restructuring `package.json` and adding `"baseUrl": "."` to `tsconfig.json`.
+3.  **Vercel & UI Rollback:** The project was then deployed to Vercel. After some UI changes, a request was made to roll back to a specific, "better" UI version. This required a deep dive into the Git history to find the correct commit hash (`4c34591`), as Vercel's direct rollback features were not viable.
+4.  **Deployment Desynchronization:** Restoring the old UI on Vercel was successful, but force-pushing this older code to `main` broke the Render deployment, as all the previous Render-specific fixes were lost.
+5.  **Re-applying Fixes & Alias Chaos:** The Render fixes were manually merged into the "good UI" codebase. This, however, created new build failures on Vercel, which has a stricter build environment, particularly around path aliases.
+6.  **The Root Cause:** After many attempts to configure aliases, the core issue was identified: conflicting `package.json` and `package-lock.json` files in both the root and the `chess-web` subdirectory were confusing Vercel's dependency installation.
+7.  **Resolution:** The solution was to remove the conflicting package files from the root directory and configure the "Root Directory" setting in Vercel to point to `chess-web`. This created a clean build environment.
+8.  **Final Sync:** With the codebase cleaned up and Vercel correctly configured, a final push brought both Vercel and Render into sync, running the desired UI with a stable backend connection.
 
-The automation script will:
-- ✅ Check for changes
-- ➕ Add all files (excluding .class files)
-- 💾 Commit with your message or auto-timestamp
-- 🚀 Push to GitHub automatically
+---
 
-## Deployment
+## ☕ Java Version (Legacy)
 
-The Next.js version can be easily deployed to Vercel:
+This repository also contains the original Java Swing-based version of the chess application.
 
-1. Push your changes to GitHub
-2. Connect your repository to Vercel
-3. Vercel will automatically build and deploy your application
+### Java Features
 
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+-   **Opponent Modes:** Play against a local friend (hot-seat) or a global friend over the network.
+-   **Networking:** Simple host/connect functionality using Java's native networking libraries.
+-   **Full Chess Rules:** Complete implementation of all standard chess moves and rules.
+
+### Running the Java Version
+
+1.  Ensure you have a JDK (Java 8 or later) installed.
+2.  Compile the source files:
+    ```sh
+    javac ChessMain.java
+    ```
+3.  Run the application:
+    ```sh
+    java ChessMain
+    ```
