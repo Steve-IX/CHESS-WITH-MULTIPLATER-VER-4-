@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode } from '@/lib/types';
-import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '@/lib/chess';
-import { chessAI } from '@/lib/ai';
-import { chessSocket } from '@/lib/socket';
-import { getThemeById } from '@/lib/themes';
+import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode } from '../lib/types';
+import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '../lib/chess';
+import { chessAI } from '../lib/ai';
+import { chessSocket } from '../lib/socket';
+import { getThemeById } from '../lib/themes';
 import { Clock, Play, Pause } from 'lucide-react';
 
 const PIECE_SYMBOLS = {
