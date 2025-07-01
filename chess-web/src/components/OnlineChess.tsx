@@ -6,7 +6,7 @@ import { ChessGame } from './ChessGame';
 import { chessSocket } from '@/lib/socket';
 import { PlayerColor, GameResult, Move, GameState, ThemeId, TimerMode } from '@/lib/types';
 import { useTheme } from '@/lib/ThemeContext';
-import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X } from 'lucide-react';
+import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, RefreshCw, Home, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface OnlineChessProps {
   onBack: () => void;
@@ -43,6 +43,10 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   
   // Game actions
   const [showGameMenu, setShowGameMenu] = useState(false);
+  const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [showDrawOfferModal, setShowDrawOfferModal] = useState(false);
+  const [rematchOffer, setRematchOffer] = useState<{ from: PlayerColor } | null>(null);
 
   const { theme } = useTheme();
 
@@ -160,15 +164,44 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
         setGameState(data.gameState);
       }),
 
-      chessSocket.onGameOver((data) => {
+      chessSocket.onGameOver((result: GameResult) => {
+        setGameResult(result);
+        setShowGameOverModal(true);
         let message = '';
-        if (!data.winner || data.winner === 'draw') {
-          message = `Game ended in a ${data.reason}!`;
+        if (result.winner === 'draw') {
+          message = `Game ended in a ${result.reason}!`;
         } else {
-          message = `${data.winner === playerColor ? 'You' : 'Opponent'} won by ${data.reason}!`;
+          message = `${result.winner === playerColor ? 'You' : 'Opponent'} won by ${result.reason}!`;
         }
         addSystemMessage(message);
-        setTimeout(() => setGamePhase('waiting'), 2000);
+      }),
+
+      chessSocket.onDrawOffered((data) => {
+        setShowDrawOfferModal(true);
+        addSystemMessage(`Opponent has offered a draw.`);
+      }),
+
+      chessSocket.onDrawDeclined(() => {
+        addSystemMessage(`Your draw offer was declined.`);
+      }),
+
+      chessSocket.onRematchOffered((data) => {
+        setRematchOffer(data);
+        addSystemMessage(`Opponent has offered a rematch.`);
+      }),
+
+      chessSocket.onRematchDeclined(() => {
+        setRematchOffer(null);
+        addSystemMessage(`Your rematch offer was declined.`);
+      }),
+
+      chessSocket.onGameRestarted((onlineGameState) => {
+        setGameState(onlineGameState.gameState);
+        setGamePhase('playing');
+        setGameResult(null);
+        setShowGameOverModal(false);
+        setRematchOffer(null);
+        addSystemMessage('Rematch accepted! New game started.');
       }),
 
       chessSocket.onChatMessage((data) => {
@@ -230,25 +263,6 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       }
     };
   }, []);
-
-  // Rejoin room on reconnect to maintain stable connection
-  useEffect(() => {
-    if (roomId && playerColor) {
-      const unsubscribe = chessSocket.onConnect(() => {
-        chessSocket.rejoinRoom(roomId, playerColor)
-          .then((data) => {
-            if (data.isGameStarted && data.gameState) {
-              setGameState(data.gameState);
-              setGamePhase('playing');
-            } else {
-              setGamePhase('waiting');
-            }
-          })
-          .catch((err) => console.error('Failed to rejoin room:', err));
-      });
-      return () => unsubscribe();
-    }
-  }, [roomId, playerColor]);
 
   const addSystemMessage = (message: string) => {
     try {
@@ -331,6 +345,30 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     
     chessSocket.offerDraw();
     setShowGameMenu(false);
+  };
+
+  const handleAcceptDraw = () => {
+    chessSocket.acceptDraw();
+    setShowDrawOfferModal(false);
+  };
+
+  const handleDeclineDraw = () => {
+    chessSocket.declineDraw();
+    setShowDrawOfferModal(false);
+  };
+
+  const handleOfferRematch = () => {
+    chessSocket.offerRematch();
+    setRematchOffer({ from: playerColor! }); // Optimistically show that you offered
+  };
+
+  const handleAcceptRematch = () => {
+    chessSocket.acceptRematch();
+  };
+
+  const handleDeclineRematch = () => {
+    chessSocket.declineRematch();
+    setRematchOffer(null);
   };
 
   const copyRoomId = () => {
@@ -669,6 +707,28 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
         />
       )}
 
+      {/* Modals */}
+      <AnimatePresence>
+        {showGameOverModal && gameResult && (
+          <GameOverModal
+            result={gameResult}
+            playerColor={playerColor!}
+            onRematch={handleOfferRematch}
+            onMenu={onBack}
+            rematchOffer={rematchOffer}
+            onAcceptRematch={handleAcceptRematch}
+            onDeclineRematch={handleDeclineRematch}
+          />
+        )}
+
+        {showDrawOfferModal && (
+          <DrawOfferModal
+            onAccept={handleAcceptDraw}
+            onDecline={handleDeclineDraw}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Chat sidebar */}
       <AnimatePresence>
         {showChat && (
@@ -834,4 +894,189 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       </AnimatePresence>
     </div>
   );
-} 
+}
+
+// --- Modals ---
+
+const GameOverModal = ({ 
+  result, 
+  playerColor, 
+  onRematch, 
+  onMenu,
+  rematchOffer,
+  onAcceptRematch,
+  onDeclineRematch 
+}: { 
+  result: GameResult; 
+  playerColor: PlayerColor;
+  onRematch: () => void;
+  onMenu: () => void;
+  rematchOffer: { from: PlayerColor } | null;
+  onAcceptRematch: () => void;
+  onDeclineRematch: () => void;
+}) => {
+  const { theme } = useTheme();
+  const isWinner = result.winner === playerColor;
+  const isDraw = result.winner === 'draw';
+  
+  let title = 'Game Over';
+  let message = '';
+  if (isDraw) {
+    title = "It's a Draw!";
+    message = `The game ended in a draw by ${result.reason}.`;
+  } else if (isWinner) {
+    title = 'You Won!';
+    message = `Congratulations! You won by ${result.reason}.`;
+  } else {
+    title = 'You Lost';
+    message = `Better luck next time! You lost by ${result.reason}.`;
+  }
+
+  const hasOpponentOfferedRematch = rematchOffer && rematchOffer.from !== playerColor;
+  const haveYouOfferedRematch = rematchOffer && rematchOffer.from === playerColor;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+        className={`${
+          theme === 'dark'
+            ? 'bg-gradient-to-br from-gray-800 via-gray-900 to-black border-white/20'
+            : 'bg-gradient-to-br from-white to-gray-100 border-gray-300'
+        } rounded-3xl border shadow-2xl p-8 w-full max-w-md text-center`}
+      >
+        <motion.div 
+          initial={{ scale: 0 }} 
+          animate={{ scale: 1, rotate: isWinner ? 10 : -10 }} 
+          transition={{ type: 'spring', delay: 0.2, damping: 10, stiffness: 150 }}
+          className="text-6xl mb-4"
+        >
+          {isDraw ? '🤝' : isWinner ? '🏆' : '🏳️'}
+        </motion.div>
+        
+        <h2 className="text-4xl font-bold mb-2">{title}</h2>
+        <p className={`${theme === 'dark' ? 'text-white/70' : 'text-gray-600'} mb-8`}>{message}</p>
+        
+        <div className="space-y-4">
+          {hasOpponentOfferedRematch ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Opponent wants a rematch!</p>
+              <div className="flex gap-3">
+                <motion.button
+                  onClick={onAcceptRematch}
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold bg-green-500/20 hover:bg-green-500/30 text-green-300 border border-green-500/30 transition-all"
+                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                >
+                  <ShieldCheck size={16} className="inline mr-2" /> Accept
+                </motion.button>
+                <motion.button
+                  onClick={onDeclineRematch}
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 transition-all"
+                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                >
+                  <ShieldAlert size={16} className="inline mr-2" /> Decline
+                </motion.button>
+              </div>
+            </div>
+          ) : (
+            <motion.button
+              onClick={onRematch}
+              disabled={haveYouOfferedRematch}
+              className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+                haveYouOfferedRematch
+                  ? 'bg-gray-500/20 text-gray-400 cursor-wait'
+                  : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30'
+              }`}
+              whileHover={!haveYouOfferedRematch ? { scale: 1.02 } : {}}
+              whileTap={!haveYouOfferedRematch ? { scale: 0.98 } : {}}
+            >
+              <RefreshCw size={16} className="inline mr-2" />
+              {haveYouOfferedRematch ? 'Waiting for opponent...' : 'Offer Rematch'}
+            </motion.button>
+          )}
+
+          <motion.button
+            onClick={onMenu}
+            className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+              theme === 'dark'
+                ? 'bg-white/10 hover:bg-white/20 text-white border border-white/30'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
+            }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Home size={16} className="inline mr-2" />
+            Back to Menu
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+const DrawOfferModal = ({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void; }) => {
+  const { theme } = useTheme();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+        className={`${
+          theme === 'dark'
+            ? 'bg-gradient-to-br from-gray-800 via-gray-900 to-black border-white/20'
+            : 'bg-gradient-to-br from-white to-gray-100 border-gray-300'
+        } rounded-3xl border shadow-2xl p-8 w-full max-w-sm text-center`}
+      >
+        <motion.div 
+          initial={{ scale: 0 }} 
+          animate={{ scale: 1 }} 
+          transition={{ type: 'spring', delay: 0.2, damping: 10, stiffness: 150 }}
+          className="text-6xl mb-4"
+        >
+          🤝
+        </motion.div>
+        
+        <h2 className="text-3xl font-bold mb-2">Draw Offer</h2>
+        <p className={`${theme === 'dark' ? 'text-white/70' : 'text-gray-600'} mb-8`}>
+          Your opponent has offered a draw. Do you accept?
+        </p>
+        
+        <div className="flex gap-4">
+          <motion.button
+            onClick={onAccept}
+            className="flex-1 py-3 px-4 rounded-xl font-semibold bg-green-500/20 hover:bg-green-500/30 text-green-300 border border-green-500/30 transition-all"
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+          >
+            <ShieldCheck size={16} className="inline mr-2" />
+            Accept
+          </motion.button>
+
+          <motion.button
+            onClick={onDecline}
+            className="flex-1 py-3 px-4 rounded-xl font-semibold bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 transition-all"
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+          >
+            <ShieldAlert size={16} className="inline mr-2" />
+            Decline
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}; 

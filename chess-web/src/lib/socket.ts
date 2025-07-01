@@ -141,6 +141,31 @@ export class ChessSocket {
       this.emitCallback('game-over', data);
     });
 
+    this.socket.on('draw-offered', (data: { from: PlayerColor }) => {
+      console.log('🤝 Draw offered by:', data.from);
+      this.emitCallback('draw-offered', data);
+    });
+
+    this.socket.on('draw-declined', (data: { from: PlayerColor }) => {
+      console.log('❌ Draw declined by:', data.from);
+      this.emitCallback('draw-declined', data);
+    });
+
+    this.socket.on('rematch-offered', (data: { from: PlayerColor }) => {
+      console.log('🤝 Rematch offered by:', data.from);
+      this.emitCallback('rematch-offered', data);
+    });
+
+    this.socket.on('rematch-declined', (data: { from: PlayerColor }) => {
+      console.log('❌ Rematch declined by:', data.from);
+      this.emitCallback('rematch-declined', data);
+    });
+
+    this.socket.on('game-restarted', (gameState: OnlineGameState) => {
+      console.log('🔄 Game restarted');
+      this.emitCallback('game-restarted', gameState);
+    });
+
     this.socket.on('room-full', () => {
       console.log('🚫 Room is full');
       this.emitCallback('room-full');
@@ -169,18 +194,6 @@ export class ChessSocket {
     this.socket.on('player-disconnected', (data: { playerColor: PlayerColor, playerId: string }) => {
       console.log('⚠️ Player temporarily disconnected:', data);
       this.emitCallback('player-disconnected', data);
-    });
-
-    // Room rejoined on reconnect
-    this.socket.on('room-rejoined', (data: OnlineGameState) => {
-      console.log('🔄 Room rejoined:', data);
-      this.emitCallback('room-rejoined', data);
-    });
-    
-    // Player rejoined on reconnect
-    this.socket.on('player-rejoined', (data: { playerColor: PlayerColor, playerId: string }) => {
-      console.log('🔄 Player rejoined:', data);
-      this.emitCallback('player-rejoined', data);
     });
   }
 
@@ -374,42 +387,6 @@ export class ChessSocket {
     });
   }
 
-  // Rejoin room on reconnect: updates socket id and restores room state
-  rejoinRoom(roomId: string, playerColor: PlayerColor): Promise<OnlineGameState> {
-    return new Promise((resolve, reject) => {
-      if (!this.socket || !this.socket.connected) {
-        reject(new Error('Socket not connected'));
-        return;
-      }
-      const onRejoined = (data: OnlineGameState) => {
-        cleanup();
-        resolve(data);
-      };
-      const onError = (error: string) => {
-        cleanup();
-        reject(new Error(error));
-      };
-      const cleanup = () => {
-        this.removeCallback('room-rejoined', onRejoined);
-        this.removeCallback('error', onError);
-      };
-      this.addCallback('room-rejoined', onRejoined);
-      this.addCallback('error', onError);
-      this.socket.emit('rejoin-room', { roomId, playerColor });
-    });
-  }
-
-  // Callback registrations for rejoin events
-  onRoomRejoined(callback: (data: OnlineGameState) => void): () => void {
-    this.addCallback('room-rejoined', callback);
-    return () => this.removeCallback('room-rejoined', callback);
-  }
-
-  onPlayerRejoined(callback: (data: { playerColor: PlayerColor; playerId: string }) => void): () => void {
-    this.addCallback('player-rejoined', callback);
-    return () => this.removeCallback('player-rejoined', callback);
-  }
-
   // Game actions
   makeMove(move: Move): void {
     if (this.socket && this.roomId && this.socket.connected) {
@@ -466,6 +443,27 @@ export class ChessSocket {
     }
   }
 
+  offerRematch(): void {
+    if (this.socket && this.roomId && this.socket.connected) {
+      console.log('🤝 Offering rematch');
+      this.socket.emit('offer-rematch', this.roomId);
+    }
+  }
+
+  acceptRematch(): void {
+    if (this.socket && this.roomId && this.socket.connected) {
+      console.log('✅ Accepting rematch');
+      this.socket.emit('accept-rematch', this.roomId);
+    }
+  }
+
+  declineRematch(): void {
+    if (this.socket && this.roomId && this.socket.connected) {
+      console.log('❌ Declining rematch');
+      this.socket.emit('decline-rematch', this.roomId);
+    }
+  }
+
   // Event listeners
   onRoomCreated(callback: (data: { roomId: string, playerColor: PlayerColor }) => void): () => void {
     this.addCallback('room-created', callback);
@@ -502,10 +500,35 @@ export class ChessSocket {
     return () => this.removeCallback('game-over', callback);
   }
 
+  onDrawOffered(callback: (data: { from: PlayerColor }) => void): () => void {
+    this.addCallback('draw-offered', callback);
+    return () => this.removeCallback('draw-offered', callback);
+  }
+
+  onDrawDeclined(callback: (data: { from: PlayerColor }) => void): () => void {
+    this.addCallback('draw-declined', callback);
+    return () => this.removeCallback('draw-declined', callback);
+  }
+
+  onRematchOffered(callback: (data: { from: PlayerColor }) => void): () => void {
+    this.addCallback('rematch-offered', callback);
+    return () => this.removeCallback('rematch-offered', callback);
+  }
+
+  onRematchDeclined(callback: (data: { from: PlayerColor }) => void): () => void {
+    this.addCallback('rematch-declined', callback);
+    return () => this.removeCallback('rematch-declined', callback);
+  }
+
+  onGameRestarted(callback: (gameState: OnlineGameState) => void): () => void {
+    this.addCallback('game-restarted', callback);
+    return () => this.removeCallback('game-restarted', callback);
+  }
+
   onChatMessage(callback: (data: { playerId: string, message: string, playerColor: PlayerColor }) => void): () => void {
     this.addCallback('chat-message', callback);
     return () => this.removeCallback('chat-message', callback);
-        }
+  }
 
   onError(callback: (error: string) => void): () => void {
     this.addCallback('error', callback);
@@ -535,7 +558,7 @@ export class ChessSocket {
   onReconnectError(callback: (error: any) => void): () => void {
     this.addCallback('reconnect_error', callback);
     return () => this.removeCallback('reconnect_error', callback);
-    }
+  }
 
   onReconnectFailed(callback: () => void): () => void {
     this.addCallback('reconnect_failed', callback);
@@ -550,7 +573,7 @@ export class ChessSocket {
   onPlayerDisconnected(callback: (data: { playerColor: PlayerColor, playerId: string }) => void): () => void {
     this.addCallback('player-disconnected', callback);
     return () => this.removeCallback('player-disconnected', callback);
-    }
+  }
 
   // Getters
   getIsHost(): boolean {

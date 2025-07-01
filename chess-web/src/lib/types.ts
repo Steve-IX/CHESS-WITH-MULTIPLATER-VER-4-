@@ -2,7 +2,7 @@ export type PieceType = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king'
 export type PlayerColor = 'white' | 'black';
 export type GameMode = 'local' | 'computer' | 'online';
 export type Difficulty = 'easy' | 'medium' | 'hard';
-export type ThemeId = 'classic' | 'mahogany' | 'emerald' | 'midnight' | 'crystal';
+export type ThemeId = 'classic' | 'neo' | 'glassy' | 'ocean' | 'forest' | 'crystal';
 export type TimerMode = '3min' | '5min' | '10min' | 'custom' | 'none';
 
 export interface Position {
@@ -65,8 +65,8 @@ export interface ChessGameProps {
 }
 
 export interface GameResult {
-  winner: PlayerColor | 'draw';
-  reason: 'checkmate' | 'stalemate' | 'resignation' | 'timeout' | 'draw';
+  winner?: PlayerColor | 'draw';
+  reason: 'checkmate' | 'stalemate' | 'resignation' | 'timeout' | 'draw' | 'opponent left';
 }
 
 export interface ChessAI {

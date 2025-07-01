@@ -356,8 +356,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           socket.emit('error', 'Game not active');
           return;
         }
+
+        const player = Array.from(room.players.values()).find(p => p.id === socket.id);
+        if (!player) return;
         
-        socket.to(roomId).emit('draw-offered');
+        socket.to(roomId).emit('draw-offered', { from: player.color });
         console.log(`🤝 Draw offered in room ${roomId}`);
       });
 
@@ -372,7 +375,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         io.to(roomId).emit('game-over', {
           reason: 'draw',
-          winner: undefined
+          winner: 'draw'
         });
         
         room.isGameStarted = false;
@@ -381,8 +384,55 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
       // Decline draw
       socket.on('decline-draw', (roomId: string) => {
-        socket.to(roomId).emit('draw-declined');
+        const room = rooms.get(roomId);
+        if (!room) return;
+        const player = Array.from(room.players.values()).find(p => p.id === socket.id);
+        if (!player) return;
+        socket.to(roomId).emit('draw-declined', { from: player.color });
         console.log(`❌ Draw declined in room ${roomId}`);
+      });
+
+      // Offer rematch
+      socket.on('offer-rematch', (roomId: string) => {
+        const room = rooms.get(roomId);
+        if (!room) return;
+        const player = Array.from(room.players.values()).find(p => p.id === socket.id);
+        if (!player) return;
+        socket.to(roomId).emit('rematch-offered', { from: player.color });
+        console.log(`🤝 Rematch offered in room ${roomId} by ${player.color}`);
+      });
+
+      // Accept rematch
+      socket.on('accept-rematch', (roomId: string) => {
+        const room = rooms.get(roomId);
+        if (!room) return;
+        
+        // Reset game state
+        room.gameState = createInitialGameState();
+        room.isGameStarted = true;
+        
+        const gameState = {
+          roomId,
+          players: Object.fromEntries(
+            Array.from(room.players.entries()).map(([color, player]) => [color, player.id])
+          ),
+          gameState: room.gameState,
+          isGameStarted: true,
+          spectators: room.spectators
+        };
+        
+        io.to(roomId).emit('game-restarted', gameState);
+        console.log(`🔄 Game restarted in room ${roomId}`);
+      });
+
+      // Decline rematch
+      socket.on('decline-rematch', (roomId: string) => {
+        const room = rooms.get(roomId);
+        if (!room) return;
+        const player = Array.from(room.players.values()).find(p => p.id === socket.id);
+        if (!player) return;
+        socket.to(roomId).emit('rematch-declined', { from: player.color });
+        console.log(`❌ Rematch declined in room ${roomId} by ${player.color}`);
       });
 
       // Disconnect
@@ -451,38 +501,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             room.spectators.splice(spectatorIndex, 1);
           }
         }
-      });
-
-      // Rejoin room on reconnect
-      socket.on('rejoin-room', (data: { roomId: string, playerColor: PlayerColor }) => {
-        const { roomId: reRoomId, playerColor: reColor } = data;
-        const room = rooms.get(reRoomId);
-        if (!room) {
-          socket.emit('room-not-found');
-          return;
-        }
-        const player = room.players.get(reColor);
-        if (!player) {
-          socket.emit('error', 'Not a player in this room');
-          return;
-        }
-        // Update socket ID and rejoin room
-        player.id = socket.id;
-        socket.join(reRoomId);
-        console.log(`🔄 Player ${reColor} rejoined room ${reRoomId} with new socket id ${socket.id}`);
-        // Notify rejoined player
-        socket.emit('room-rejoined', {
-          roomId: reRoomId,
-          playerColor: reColor,
-          gameState: room.gameState,
-          isGameStarted: room.isGameStarted,
-          players: Object.fromEntries(
-            Array.from(room.players.entries()).map(([color, p]) => [color, p.id])
-          ),
-          spectators: room.spectators
-        });
-        // Notify other players of rejoin
-        socket.to(reRoomId).emit('player-rejoined', { playerColor: reColor, playerId: socket.id });
       });
     });
 
