@@ -73,9 +73,9 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
       setError(null);
     };
 
-    const onDisconnect = (reason: string) => {
+    const onDisconnect = (reason?: string) => {
       setConnectionStatus('disconnected');
-      if (reason !== 'io client disconnect') {
+      if (reason && reason !== 'io client disconnect') {
         setError('Lost connection to game server. Attempting to reconnect...');
       }
     };
