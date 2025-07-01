@@ -25,9 +25,10 @@ export class ChessSocket {
     if (typeof window !== 'undefined') {
       try {
         // Initialize socket connection - use the API route for production
-        const socketUrl = process.env.NODE_ENV === 'production' 
-          ? window.location.origin 
-          : 'http://localhost:3000';
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
+          (process.env.NODE_ENV === 'production' 
+            ? window.location.origin 
+            : 'http://localhost:3000');
         
         this.socket = io(socketUrl, {
           path: '/api/socket',
