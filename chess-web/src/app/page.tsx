@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ChessGame } from '@/components/ChessGame';
-import { GameMenu } from '@/components/GameMenu';
-import { ThemeSelector } from '@/components/ThemeSelector';
-import { MusicPlayer } from '@/components/MusicPlayer';
-import { OnlineChess } from '@/components/OnlineChess';
-import { GameMode, Difficulty, GameResult, ThemeId, TimerMode } from '@/lib/types';
+import { ChessGame } from '../components/ChessGame';
+import { GameMenu } from '../components/GameMenu';
+import { ThemeSelector } from '../components/ThemeSelector';
+import { MusicPlayer } from '../components/MusicPlayer';
+import { OnlineChess } from '../components/OnlineChess';
+import { GameMode, Difficulty, GameResult, ThemeId, TimerMode } from '../lib/types';
 
 export default function Home() {
   const [currentMode, setCurrentMode] = useState<GameMode | null>(null);
