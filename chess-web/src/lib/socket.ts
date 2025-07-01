@@ -561,6 +561,16 @@ export class ChessSocket {
     return () => this.removeCallback('player-disconnected', callback);
   }
 
+  onGamePaused(callback: (data: { reason: string, playerColor: PlayerColor }) => void): () => void {
+    this.addCallback('game-paused', callback);
+    return () => this.removeCallback('game-paused', callback);
+  }
+
+  onGameResumed(callback: () => void): () => void {
+    this.addCallback('game-resumed', callback);
+    return () => this.removeCallback('game-resumed', callback);
+  }
+
   // Getters
   getIsHost(): boolean {
     return this.isHost;
@@ -578,30 +588,22 @@ export class ChessSocket {
     return this.socket?.connected || false;
   }
 
-  public getConnectionState(): 'connected' | 'disconnected' | 'reconnecting' {
+  getConnectionState(): 'connected' | 'disconnected' | 'reconnecting' {
     if (!this.socket) return 'disconnected';
     if (this.isReconnecting) return 'reconnecting';
     return this.socket.connected ? 'connected' : 'disconnected';
   }
 
-  public getLastPingTime(): number {
+  getLastPingTime(): number {
     return this.lastPingTime;
   }
 
-  public isPausedState(): boolean {
+  isPausedState(): boolean {
     return this.isPaused;
   }
 
-  public getReconnectAttempts(): number {
+  getReconnectAttempts(): number {
     return this.reconnectAttempts;
-  }
-
-  public onGamePaused(callback: (data: { reason: string, playerColor: PlayerColor }) => void): () => void {
-    return this.addCallback('game-paused', callback);
-  }
-
-  public onGameResumed(callback: () => void): () => void {
-    return this.addCallback('game-resumed', callback);
   }
 }
 
