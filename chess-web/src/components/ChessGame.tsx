@@ -89,17 +89,18 @@ const TimerDisplay = ({
   );
 };
 
-export function ChessGame({
-  gameState: externalGameState,
-  gameMode = 'local',
-  difficulty = 'medium',
-  playerColor = 'white',
-  themeId = 'classic',
-  timerMode = 'none',
-  customTime = 15,
-  onMove,
-  onGameOver,
-}: ChessGameProps) {
+export function ChessGame(props: ChessGameProps) {
+  const {
+    gameState: externalGameState,
+    gameMode = 'local',
+    difficulty = 'medium',
+    playerColor = 'white',
+    themeId = 'classic',
+    timerMode = 'none',
+    customTime = 15,
+    onMove,
+    onGameOver,
+  } = props;
   
   // Initialize timer state
   const getInitialTimerState = (): TimerState | undefined => {
