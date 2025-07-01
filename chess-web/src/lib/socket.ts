@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { GameState, Move, NetworkMessage, PlayerColor } from './types';
+import { GameState, Move, NetworkMessage, PlayerColor, GameResult } from './types';
 
 export interface OnlineGameState {
   roomId: string;
@@ -495,7 +495,7 @@ export class ChessSocket {
     return () => this.removeCallback('move-made', callback);
   }
 
-  onGameOver(callback: (data: { reason: string, winner?: PlayerColor | 'draw' }) => void): () => void {
+  onGameOver(callback: (data: GameResult) => void): () => void {
     this.addCallback('game-over', callback);
     return () => this.removeCallback('game-over', callback);
   }
