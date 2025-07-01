@@ -595,6 +595,14 @@ export class ChessSocket {
   public getReconnectAttempts(): number {
     return this.reconnectAttempts;
   }
+
+  public onGamePaused(callback: (data: { reason: string, playerColor: PlayerColor }) => void): () => void {
+    return this.addCallback('game-paused', callback);
+  }
+
+  public onGameResumed(callback: () => void): () => void {
+    return this.addCallback('game-resumed', callback);
+  }
 }
 
 export const chessSocket = new ChessSocket(); 
