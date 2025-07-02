@@ -9,6 +9,7 @@ import { chessSocket } from '../lib/socket';
 import { getThemeById } from '../lib/themes';
 import { Clock, Play, Pause, RefreshCw, Home } from 'lucide-react';
 import { ThemeToggleButton } from './ThemeToggleButton';
+import { useTheme } from '../lib/ThemeContext';
 
 const PIECE_SYMBOLS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -177,6 +178,7 @@ export function ChessGame(props: ChessGameProps) {
   
   // Get current theme
   const theme = getThemeById(themeId);
+  const { theme: currentTheme } = useTheme();
 
   // Timer countdown effect
   useEffect(() => {
@@ -561,7 +563,14 @@ export function ChessGame(props: ChessGameProps) {
   const displayedBoard = playerColor === 'white' ? gameState.board : [...gameState.board].reverse().map(row => [...row].reverse());
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 animated-grid-background relative">
+    <div 
+      className={`min-h-screen w-full flex items-center justify-center p-6 animated-grid-background theme-${themeId} relative`}
+      style={{
+        '--bg-color': currentTheme === 'dark' ? theme.backgroundDark : theme.backgroundLight,
+        '--grid-color': currentTheme === 'dark' ? theme.gridColorDark : theme.gridColorLight,
+        '--bg-gradient': currentTheme === 'dark' ? theme.backgroundDark : theme.backgroundLight,
+      } as React.CSSProperties}
+    >
       <div className="absolute top-4 left-4 z-20">
         <ThemeToggleButton />
       </div>

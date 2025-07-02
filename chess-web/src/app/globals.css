@@ -20,23 +20,78 @@ body {
 }
 
 .animated-grid-background {
-  --grid-line-color-light: rgba(203, 213, 225, 0.8); /* slate-300 */
-  --grid-line-color-dark: rgba(51, 65, 85, 0.6);    /* slate-700 */
-  --grid-bg-light: #f0f5fa; /* light blue gray */
-  --grid-bg-dark: #011627;  /* deep navy */
-
   background-size: 50px 50px;
-  background-image: linear-gradient(to right, var(--grid-line-color-light) 1px, transparent 1px),
-                    linear-gradient(to bottom, var(--grid-line-color-light) 1px, transparent 1px);
-  background-color: var(--grid-bg-light);
   animation: moveGrid 40s linear infinite;
-  transition: background-color 0.5s ease;
+  transition: background-color 0.5s ease, background-image 0.5s ease;
 }
 
-.dark-mode .animated-grid-background {
-  background-image: linear-gradient(to right, var(--grid-line-color-dark) 1px, transparent 1px),
-                    linear-gradient(to bottom, var(--grid-line-color-dark) 1px, transparent 1px);
-  background-color: var(--grid-bg-dark);
+/* Default theme (classic) */
+.animated-grid-background.theme-classic {
+  background-color: var(--bg-color, #f0f5fa);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(120, 113, 108, 0.8)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(120, 113, 108, 0.8)) 1px, transparent 1px);
+}
+
+.dark-mode .animated-grid-background.theme-classic {
+  background-color: var(--bg-color, #011627);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(68, 64, 60, 0.6)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(68, 64, 60, 0.6)) 1px, transparent 1px);
+}
+
+/* Mahogany theme */
+.animated-grid-background.theme-mahogany {
+  background-color: var(--bg-color, #fffbeb);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(217, 119, 6, 0.7)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(217, 119, 6, 0.7)) 1px, transparent 1px);
+}
+
+.dark-mode .animated-grid-background.theme-mahogany {
+  background-color: var(--bg-color, #451a03);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(120, 53, 15, 0.6)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(120, 53, 15, 0.6)) 1px, transparent 1px);
+}
+
+/* Emerald theme */
+.animated-grid-background.theme-emerald {
+  background-color: var(--bg-color, #ecfdf5);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(5, 150, 105, 0.7)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(5, 150, 105, 0.7)) 1px, transparent 1px);
+}
+
+.dark-mode .animated-grid-background.theme-emerald {
+  background-color: var(--bg-color, #064e3b);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(6, 95, 70, 0.6)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(6, 95, 70, 0.6)) 1px, transparent 1px);
+}
+
+/* Midnight theme */
+.animated-grid-background.theme-midnight {
+  background-color: var(--bg-color, #f8fafc);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(71, 85, 105, 0.7)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(71, 85, 105, 0.7)) 1px, transparent 1px);
+}
+
+.dark-mode .animated-grid-background.theme-midnight {
+  background-color: var(--bg-color, #0f172a);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(30, 41, 59, 0.6)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(30, 41, 59, 0.6)) 1px, transparent 1px);
+}
+
+/* Crystal theme */
+.animated-grid-background.theme-crystal {
+  background: var(--bg-gradient, linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f0f4ff 50%, #fdf4ff 75%, #fef7f0 100%));
+  background-size: 50px 50px, 100% 100%;
+  background-image: linear-gradient(to right, var(--grid-color, rgba(147, 197, 253, 0.4)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(147, 197, 253, 0.4)) 1px, transparent 1px),
+                    var(--bg-gradient, linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f0f4ff 50%, #fdf4ff 75%, #fef7f0 100%));
+}
+
+.dark-mode .animated-grid-background.theme-crystal {
+  background: var(--bg-gradient, linear-gradient(135deg, #0c1445 0%, #1e1b4b 25%, #312e81 50%, #4c1d95 75%, #581c87 100%));
+  background-size: 50px 50px, 100% 100%;
+  background-image: linear-gradient(to right, var(--grid-color, rgba(67, 56, 202, 0.4)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(67, 56, 202, 0.4)) 1px, transparent 1px),
+                    var(--bg-gradient, linear-gradient(135deg, #0c1445 0%, #1e1b4b 25%, #312e81 50%, #4c1d95 75%, #581c87 100%));
 }
 
 @keyframes moveGrid {

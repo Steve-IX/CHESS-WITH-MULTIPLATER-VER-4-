@@ -14,6 +14,10 @@ export interface ChessTheme {
   blackPieceTextShadow: string;
   coordinateLight: string;
   coordinateDark: string;
+  backgroundLight: string;
+  backgroundDark: string;
+  gridColorLight: string;
+  gridColorDark: string;
 }
 
 export const chessThemes: ChessTheme[] = [
@@ -32,7 +36,11 @@ export const chessThemes: ChessTheme[] = [
     whitePieceTextShadow: '2px 2px 0px #374151, -1px -1px 0px #374151, 1px -1px 0px #374151, -1px 1px 0px #374151',
     blackPieceTextShadow: '2px 2px 0px #f9fafb, -1px -1px 0px #f9fafb, 1px -1px 0px #f9fafb, -1px 1px 0px #f9fafb',
     coordinateLight: 'text-stone-600',
-    coordinateDark: 'text-stone-300'
+    coordinateDark: 'text-stone-300',
+    backgroundLight: '#f0f5fa',
+    backgroundDark: '#011627',
+    gridColorLight: 'rgba(120, 113, 108, 0.8)',
+    gridColorDark: 'rgba(68, 64, 60, 0.6)'
   },
   {
     id: 'mahogany',
@@ -49,7 +57,11 @@ export const chessThemes: ChessTheme[] = [
     whitePieceTextShadow: '2px 2px 0px #451a03, -1px -1px 0px #451a03, 1px -1px 0px #451a03, -1px 1px 0px #451a03',
     blackPieceTextShadow: '2px 2px 0px #fffbeb, -1px -1px 0px #fffbeb, 1px -1px 0px #fffbeb, -1px 1px 0px #fffbeb',
     coordinateLight: 'text-amber-700',
-    coordinateDark: 'text-amber-200'
+    coordinateDark: 'text-amber-200',
+    backgroundLight: '#fffbeb',
+    backgroundDark: '#451a03',
+    gridColorLight: 'rgba(217, 119, 6, 0.7)',
+    gridColorDark: 'rgba(120, 53, 15, 0.6)'
   },
   {
     id: 'emerald',
@@ -66,7 +78,11 @@ export const chessThemes: ChessTheme[] = [
     whitePieceTextShadow: '2px 2px 0px #064e3b, -1px -1px 0px #064e3b, 1px -1px 0px #064e3b, -1px 1px 0px #064e3b',
     blackPieceTextShadow: '2px 2px 0px #ecfdf5, -1px -1px 0px #ecfdf5, 1px -1px 0px #ecfdf5, -1px 1px 0px #ecfdf5',
     coordinateLight: 'text-emerald-700',
-    coordinateDark: 'text-emerald-200'
+    coordinateDark: 'text-emerald-200',
+    backgroundLight: '#ecfdf5',
+    backgroundDark: '#064e3b',
+    gridColorLight: 'rgba(5, 150, 105, 0.7)',
+    gridColorDark: 'rgba(6, 95, 70, 0.6)'
   },
   {
     id: 'midnight',
@@ -83,7 +99,11 @@ export const chessThemes: ChessTheme[] = [
     whitePieceTextShadow: '2px 2px 0px #0f172a, -1px -1px 0px #0f172a, 1px -1px 0px #0f172a, -1px 1px 0px #0f172a',
     blackPieceTextShadow: '2px 2px 0px #f8fafc, -1px -1px 0px #f8fafc, 1px -1px 0px #f8fafc, -1px 1px 0px #f8fafc',
     coordinateLight: 'text-slate-600',
-    coordinateDark: 'text-slate-300'
+    coordinateDark: 'text-slate-300',
+    backgroundLight: '#f8fafc',
+    backgroundDark: '#0f172a',
+    gridColorLight: 'rgba(71, 85, 105, 0.7)',
+    gridColorDark: 'rgba(30, 41, 59, 0.6)'
   },
   {
     id: 'crystal',
@@ -100,7 +120,11 @@ export const chessThemes: ChessTheme[] = [
     whitePieceTextShadow: '0 0 10px rgba(255,255,255,0.8), 2px 2px 4px rgba(0,0,0,0.3), -1px -1px 2px rgba(255,255,255,0.5)',
     blackPieceTextShadow: '0 0 8px rgba(0,0,0,0.6), 2px 2px 4px rgba(255,255,255,0.4), -1px -1px 2px rgba(0,0,0,0.8)',
     coordinateLight: 'text-white text-opacity-80',
-    coordinateDark: 'text-gray-200'
+    coordinateDark: 'text-gray-200',
+    backgroundLight: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #f0f4ff 50%, #fdf4ff 75%, #fef7f0 100%)',
+    backgroundDark: 'linear-gradient(135deg, #0c1445 0%, #1e1b4b 25%, #312e81 50%, #4c1d95 75%, #581c87 100%)',
+    gridColorLight: 'rgba(147, 197, 253, 0.4)',
+    gridColorDark: 'rgba(67, 56, 202, 0.4)'
   }
 ];
 

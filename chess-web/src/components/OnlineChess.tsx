@@ -8,6 +8,7 @@ import { PlayerColor, GameResult, Move, GameState, ThemeId, TimerMode } from '@/
 import { useTheme } from '@/lib/ThemeContext';
 import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, RefreshCw, Home, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { ThemeToggleButton } from './ThemeToggleButton';
+import { getThemeById } from '@/lib/themes';
 
 interface OnlineChessProps {
   onBack: () => void;
@@ -51,6 +52,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
   const [rematchOffer, setRematchOffer] = useState<{ from: PlayerColor } | null>(null);
 
   const { theme } = useTheme();
+  const chessTheme = getThemeById(selectedTheme);
 
   // Initialize socket connection
   useEffect(() => {
@@ -402,14 +404,14 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
 
   if (gamePhase === 'menu') {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
-        {/* Background */}
-        <div className={`absolute inset-0 transition-all duration-1000 ${
-          theme === 'dark' 
-            ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
-            : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
-        }`} />
-
+      <div 
+        className={`min-h-screen flex items-center justify-center relative overflow-hidden p-4 animated-grid-background theme-${selectedTheme}`}
+        style={{
+          '--bg-color': theme === 'dark' ? chessTheme.backgroundDark : chessTheme.backgroundLight,
+          '--grid-color': theme === 'dark' ? chessTheme.gridColorDark : chessTheme.gridColorLight,
+          '--bg-gradient': theme === 'dark' ? chessTheme.backgroundDark : chessTheme.backgroundLight,
+        } as React.CSSProperties}
+      >
         <div className="relative z-10 w-full max-w-md">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -556,13 +558,14 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
 
   if (gamePhase === 'waiting') {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
-        {/* Background */}
-        <div className={`absolute inset-0 transition-all duration-1000 ${
-          theme === 'dark' 
-            ? 'bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900'
-            : 'bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100'
-        }`} />
+      <div 
+        className={`min-h-screen flex items-center justify-center relative overflow-hidden p-4 animated-grid-background theme-${selectedTheme}`}
+        style={{
+          '--bg-color': theme === 'dark' ? chessTheme.backgroundDark : chessTheme.backgroundLight,
+          '--grid-color': theme === 'dark' ? chessTheme.gridColorDark : chessTheme.gridColorLight,
+          '--bg-gradient': theme === 'dark' ? chessTheme.backgroundDark : chessTheme.backgroundLight,
+        } as React.CSSProperties}
+      >
 
         <div className="relative z-10 w-full max-w-lg">
           <motion.div
