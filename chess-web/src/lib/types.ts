@@ -62,6 +62,7 @@ export interface ChessGameProps {
   customTime?: number;
   onMove?: (move: Move) => void;
   onGameOver?: (result: GameResult) => void;
+  onBackToMenu?: () => void;
 }
 
 export interface GameResult {

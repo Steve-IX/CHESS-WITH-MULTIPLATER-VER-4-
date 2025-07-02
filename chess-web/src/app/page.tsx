@@ -48,17 +48,8 @@ export default function Home() {
   };
 
   const handleGameOver = (result: GameResult) => {
-    let message = '';
-    
-    if (result.winner === 'draw') {
-      message = `Game ended in a ${result.reason}!`;
-    } else {
-      message = `${result.winner === 'white' ? 'White' : 'Black'} wins by ${result.reason}!`;
-    }
-    
-    setTimeout(() => {
-      alert(message);
-    }, 500);
+    // Game over is now handled by the ChessGame component's modal
+    // This function is kept for compatibility but doesn't need to do anything
   };
 
   const handleBackToMenu = () => {
@@ -138,6 +129,7 @@ export default function Home() {
           timerMode={timerMode}
           customTime={customTime}
           onGameOver={handleGameOver}
+          onBackToMenu={handleBackToMenu}
         />
       </div>
       <MusicPlayer />

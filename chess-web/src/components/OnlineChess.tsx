@@ -290,7 +290,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
     
     try {
       setError(null);
-      await chessSocket.createRoom();
+      await chessSocket.createRoom(timerMode, customTime);
     } catch (error: any) {
       setError(error.message);
     }

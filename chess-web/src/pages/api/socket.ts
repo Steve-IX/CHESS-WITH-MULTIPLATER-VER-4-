@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Server as ServerIO } from 'socket.io';
 import { Server as NetServer } from 'http';
-import { GameState, Move, PlayerColor } from '@/lib/types';
+import { GameState, Move, PlayerColor, TimerState, TimerMode } from '@/lib/types';
 import { createInitialBoard, makeMove, isInCheck, getAllLegalMoves } from '@/lib/chess';
 
 interface Player {
@@ -18,6 +18,8 @@ interface Room {
   gameState: GameState | null;
   isGameStarted: boolean;
   createdAt: Date;
+  timerMode: TimerMode;
+  customTime?: number;
 }
 
 const rooms = new Map<string, Room>();
@@ -36,6 +38,26 @@ function createInitialGameState(): GameState {
     halfmoveClock: 0,
     fullmoveNumber: 1,
     timer: undefined
+  };
+}
+
+// Helper function to create timer state based on host's settings
+function createTimerState(timerMode: string, customTime?: number): TimerState | undefined {
+  if (timerMode === 'none') return undefined;
+  
+  let timeInSeconds = 0;
+  switch (timerMode) {
+    case '3min': timeInSeconds = 3 * 60; break;
+    case '5min': timeInSeconds = 5 * 60; break;
+    case '10min': timeInSeconds = 10 * 60; break;
+    case 'custom': timeInSeconds = (customTime || 15) * 60; break;
+  }
+  
+  return {
+    whiteTime: timeInSeconds,
+    blackTime: timeInSeconds,
+    isActive: false,
+    mode: timerMode as TimerMode,
   };
 }
 
@@ -77,7 +99,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       });
 
       // Create room
-      socket.on('create-room', () => {
+      socket.on('create-room', (data: { timerMode: TimerMode, customTime?: number } = { timerMode: 'none' }) => {
         const roomId = generateRoomId();
         const playerColor: PlayerColor = 'white'; // Host is always white
         
@@ -88,7 +110,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           spectators: [],
           gameState: null,
           isGameStarted: false,
-          createdAt: new Date()
+          createdAt: new Date(),
+          timerMode: data.timerMode || 'none',
+          customTime: data.customTime
         };
         
         room.players.set(playerColor, {
@@ -171,6 +195,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           console.log(`🎮 Starting game in room ${roomId} with 2 players`);
           
           room.gameState = createInitialGameState();
+          room.gameState.timer = createTimerState(room.timerMode, room.customTime);
           room.isGameStarted = true;
           
           const gameState = {
@@ -212,6 +237,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         }
         
         room.gameState = createInitialGameState();
+        room.gameState.timer = createTimerState(room.timerMode, room.customTime);
         room.isGameStarted = true;
         
         const gameState = {
@@ -253,6 +279,11 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         try {
           // Apply move using proper chess logic
           const newGameState = makeMove(room.gameState, data.move);
+          
+          // Handle timer on first move
+          if (newGameState.timer && newGameState.moveHistory.length === 1) {
+            newGameState.timer.isActive = true;
+          }
           
           // Check for game over conditions
           const opponent = newGameState.currentPlayer;
@@ -409,6 +440,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         
         // Reset game state
         room.gameState = createInitialGameState();
+        room.gameState.timer = createTimerState(room.timerMode, room.customTime);
         room.isGameStarted = true;
         
         const gameState = {
@@ -433,6 +465,30 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!player) return;
         socket.to(roomId).emit('rematch-declined', { from: player.color });
         console.log(`❌ Rematch declined in room ${roomId} by ${player.color}`);
+      });
+
+      // Handle timer timeout
+      socket.on('timer-timeout', (data: { roomId: string, playerColor: PlayerColor }) => {
+        const room = rooms.get(data.roomId);
+        
+        if (!room || !room.isGameStarted || !room.gameState) {
+          return;
+        }
+        
+        // Verify the timeout is for the current player
+        if (room.gameState.currentPlayer !== data.playerColor) {
+          return;
+        }
+        
+        const winner = data.playerColor === 'white' ? 'black' : 'white';
+        
+        io.to(data.roomId).emit('game-over', {
+          reason: 'timeout',
+          winner
+        });
+        
+        room.isGameStarted = false;
+        console.log(`⏰ Timer timeout in room ${data.roomId} - ${winner} wins`);
       });
 
       // Disconnect

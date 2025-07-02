@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode } from '../lib/types';
+import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode, GameResult } from '../lib/types';
 import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '../lib/chess';
 import { chessAI } from '../lib/ai';
 import { chessSocket } from '../lib/socket';
 import { getThemeById } from '../lib/themes';
-import { Clock, Play, Pause } from 'lucide-react';
+import { Clock, Play, Pause, RefreshCw, Home } from 'lucide-react';
 
 const PIECE_SYMBOLS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -100,7 +100,11 @@ export function ChessGame(props: ChessGameProps) {
     customTime = 15,
     onMove,
     onGameOver,
+    onBackToMenu,
   } = props;
+  
+  // Debug logging for timer settings
+  console.log('🕐 ChessGame props:', { gameMode, timerMode, customTime, hasExternalState: !!externalGameState });
   
   // Initialize timer state
   const getInitialTimerState = (): TimerState | undefined => {
@@ -133,7 +137,10 @@ export function ChessGame(props: ChessGameProps) {
     enPassantTarget: null,
     halfmoveClock: 0,
     fullmoveNumber: 1,
-    timer: getInitialTimerState(),
+    // For online mode, use timer from external state if available, otherwise initialize it
+    timer: gameMode === 'online' 
+      ? (externalGameState?.timer || getInitialTimerState())
+      : getInitialTimerState(),
   };
 
   const [gameState, setGameState] = useState<GameState>(externalGameState || initialState);
@@ -149,10 +156,14 @@ export function ChessGame(props: ChessGameProps) {
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [hasGameStarted, setHasGameStarted] = useState(false);
+  const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
   
   // Update internal game state when external game state changes
   useEffect(() => {
     if (externalGameState && gameMode === 'online') {
+      console.log('🕐 Online game state updated:', externalGameState);
+      console.log('🕐 Timer state from server:', externalGameState.timer);
       setGameState(externalGameState);
       // Extract move notations from move history
       const notations = externalGameState.moveHistory.map(move => generateMoveNotation(move));
@@ -186,8 +197,16 @@ export function ChessGame(props: ChessGameProps) {
         
         // Check for timeout
         if (newTime <= 0) {
-          const winner = currentPlayer === 'white' ? 'black' : 'white';
-          onGameOver?.({ winner, reason: 'timeout' });
+          const winner: PlayerColor = currentPlayer === 'white' ? 'black' : 'white';
+          const result: GameResult = { winner, reason: 'timeout' };
+          
+          if (gameMode === 'online') {
+            chessSocket.reportTimeout(currentPlayer);
+          } else {
+            setGameResult(result);
+            setShowGameOverModal(true);
+            onGameOver?.(result);
+          }
           
           return {
             ...prevState,
@@ -214,7 +233,7 @@ export function ChessGame(props: ChessGameProps) {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [gameState.timer?.isActive, gameState.currentPlayer, isTimerPaused, gameState.isCheckmate, gameState.isStalemate, onGameOver]);
+  }, [gameState.timer?.isActive, gameState.currentPlayer, isTimerPaused, gameState.isCheckmate, gameState.isStalemate, onGameOver, gameMode]);
 
   // Initialize multiplayer if needed
   useEffect(() => {
@@ -426,10 +445,26 @@ export function ChessGame(props: ChessGameProps) {
 
       // Check for game end
       if (newGameState.isCheckmate) {
-        const winner = newGameState.currentPlayer === 'white' ? 'black' : 'white';
-        onGameOver?.({ winner, reason: 'checkmate' });
+        const winner: PlayerColor = newGameState.currentPlayer === 'white' ? 'black' : 'white';
+        const result: GameResult = { winner, reason: 'checkmate' };
+        
+        // For computer and local modes, show our own modal
+        if (gameMode !== 'online') {
+          setGameResult(result);
+          setShowGameOverModal(true);
+        }
+        
+        onGameOver?.(result);
       } else if (newGameState.isStalemate) {
-        onGameOver?.({ winner: 'draw', reason: 'stalemate' });
+        const result: GameResult = { winner: 'draw', reason: 'stalemate' };
+        
+        // For computer and local modes, show our own modal
+        if (gameMode !== 'online') {
+          setGameResult(result);
+          setShowGameOverModal(true);
+        }
+        
+        onGameOver?.(result);
       }
       
     } catch (error) {
@@ -469,6 +504,22 @@ export function ChessGame(props: ChessGameProps) {
     setMoveNotations([]);
     setIsTimerPaused(false);
     setHasGameStarted(false);
+    setGameResult(null);
+    setShowGameOverModal(false);
+  };
+
+  const handleNewGame = () => {
+    resetGame();
+    setShowGameOverModal(false);
+  };
+
+  const handleBackToMenu = () => {
+    if (onBackToMenu) {
+      onBackToMenu();
+    } else {
+      // Fallback to just resetting the game
+      resetGame();
+    }
   };
 
   const toggleTimer = () => {
@@ -556,26 +607,37 @@ export function ChessGame(props: ChessGameProps) {
 
               {/* Timer Controls */}
               <div className="flex flex-col gap-3">
-                <motion.button
-                  onClick={toggleTimer}
-                  className={`
-                    flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-300
-                    ${isTimerPaused 
-                      ? 'bg-green-500 hover:bg-green-600 text-white' 
-                      : 'bg-orange-500 hover:bg-orange-600 text-white'
-                    }
-                  `}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  disabled={gameState.isCheckmate || gameState.isStalemate || !hasGameStarted}
-                >
-                  {isTimerPaused ? <Play size={16} /> : <Pause size={16} />}
-                  {isTimerPaused ? 'Resume' : 'Pause'}
-                </motion.button>
+                {gameMode !== 'online' && (
+                  <motion.button
+                    onClick={toggleTimer}
+                    className={`
+                      flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-300
+                      ${isTimerPaused 
+                        ? 'bg-green-500 hover:bg-green-600 text-white' 
+                        : 'bg-orange-500 hover:bg-orange-600 text-white'
+                      }
+                    `}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    disabled={gameState.isCheckmate || gameState.isStalemate || !hasGameStarted}
+                  >
+                    {isTimerPaused ? <Play size={16} /> : <Pause size={16} />}
+                    {isTimerPaused ? 'Resume' : 'Pause'}
+                  </motion.button>
+                )}
                 
                 {!hasGameStarted && gameState.timer.mode !== 'none' && (
                   <div className="text-center text-sm text-slate-600 bg-yellow-100/80 rounded-lg p-3">
-                    Timer will start when White makes the first move
+                    {gameMode === 'online' 
+                      ? 'Timer will start when the game begins'
+                      : 'Timer will start when White makes the first move'
+                    }
+                  </div>
+                )}
+                
+                {gameMode === 'online' && (
+                  <div className="text-center text-sm text-slate-600 bg-blue-100/80 rounded-lg p-3">
+                    Timer is synchronized with your opponent
                   </div>
                 )}
               </div>
@@ -863,6 +925,130 @@ export function ChessGame(props: ChessGameProps) {
           </div>
         </motion.div>
       </div>
+
+      {/* Game Over Modal */}
+      <AnimatePresence>
+        {showGameOverModal && gameResult && (
+          <GameOverModal
+            result={gameResult}
+            gameMode={gameMode}
+            playerColor={playerColor}
+            onNewGame={handleNewGame}
+            onBackToMenu={handleBackToMenu}
+            themeId={themeId}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
-} 
+}
+
+// GameOver Modal Component
+const GameOverModal = ({
+  result,
+  gameMode,
+  playerColor,
+  onNewGame,
+  onBackToMenu,
+  themeId
+}: {
+  result: GameResult;
+  gameMode: GameMode;
+  playerColor: PlayerColor;
+  onNewGame: () => void;
+  onBackToMenu: () => void;
+  themeId: ThemeId;
+}) => {
+  const theme = getThemeById(themeId);
+  
+  let title = 'Game Over';
+  let message = '';
+  let emoji = '🏁';
+  
+  if (result.winner === 'draw') {
+    title = "It's a Draw!";
+    message = `The game ended in a draw by ${result.reason}.`;
+    emoji = '🤝';
+  } else {
+    const isPlayerWinner = result.winner === playerColor;
+    
+    if (gameMode === 'computer') {
+      if (isPlayerWinner) {
+        title = 'You Won!';
+        message = `Congratulations! You beat the AI by ${result.reason}.`;
+        emoji = '🏆';
+      } else {
+        title = 'AI Wins';
+        message = `The AI won by ${result.reason}. Better luck next time!`;
+        emoji = '🤖';
+      }
+    } else if (gameMode === 'local') {
+      title = `${result.winner === 'white' ? 'White' : 'Black'} Wins!`;
+      message = `${result.winner === 'white' ? 'White' : 'Black'} won by ${result.reason}.`;
+      emoji = result.winner === 'white' ? '⚪' : '⚫';
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+        className={`${
+          themeId === 'crystal'
+            ? 'bg-gradient-to-br from-white/90 via-blue-50/90 to-purple-50/90 border-white/40'
+            : 'bg-gradient-to-br from-white to-gray-100 border-gray-300'
+        } rounded-3xl border shadow-2xl p-8 w-full max-w-md text-center backdrop-blur-xl`}
+      >
+        <motion.div 
+          initial={{ scale: 0 }} 
+          animate={{ scale: 1, rotate: result.winner !== 'draw' && result.winner === playerColor ? 10 : -5 }} 
+          transition={{ type: 'spring', delay: 0.2, damping: 10, stiffness: 150 }}
+          className="text-6xl mb-4"
+        >
+          {emoji}
+        </motion.div>
+        
+        <h2 className="text-4xl font-bold mb-2 text-gray-800">{title}</h2>
+        <p className="text-gray-600 mb-8 text-lg">{message}</p>
+        
+        <div className="space-y-4">
+          <motion.button
+            onClick={onNewGame}
+            className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+              themeId === 'crystal'
+                ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 border border-blue-500/30'
+                : 'bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300'
+            }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <RefreshCw size={16} className="inline mr-2" />
+            New Game
+          </motion.button>
+
+          <motion.button
+            onClick={onBackToMenu}
+            className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+              themeId === 'crystal'
+                ? 'bg-gray-500/20 hover:bg-gray-500/30 text-gray-700 border border-gray-500/30'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
+            }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Home size={16} className="inline mr-2" />
+            Back to Menu
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}; 

@@ -314,7 +314,7 @@ export class ChessSocket {
     }
   }
 
-  createRoom(): Promise<{ roomId: string, playerColor: PlayerColor }> {
+  createRoom(timerMode: string = 'none', customTime?: number): Promise<{ roomId: string, playerColor: PlayerColor }> {
     return new Promise((resolve, reject) => {
       if (!this.socket || !this.socket.connected) {
         reject(new Error('Socket not connected'));
@@ -336,7 +336,7 @@ export class ChessSocket {
       this.addCallback('room-created', onRoomCreated);
       this.addCallback('error', onError);
 
-      this.socket.emit('create-room');
+      this.socket.emit('create-room', { timerMode, customTime });
     });
   }
 
@@ -462,6 +462,13 @@ export class ChessSocket {
     if (this.socket && this.roomId && this.socket.connected) {
       console.log('❌ Declining rematch');
       this.socket.emit('decline-rematch', this.roomId);
+    }
+  }
+
+  reportTimeout(playerColor: PlayerColor): void {
+    if (this.socket && this.roomId && this.socket.connected) {
+      console.log('⏰ Reporting timeout for', playerColor);
+      this.socket.emit('timer-timeout', { roomId: this.roomId, playerColor });
     }
   }
 
