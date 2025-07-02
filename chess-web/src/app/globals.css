@@ -18,3 +18,32 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+.animated-grid-background {
+  --grid-line-color-light: rgba(203, 213, 225, 0.8); /* slate-300 */
+  --grid-line-color-dark: rgba(51, 65, 85, 0.6);    /* slate-700 */
+  --grid-bg-light: #f0f5fa; /* light blue gray */
+  --grid-bg-dark: #011627;  /* deep navy */
+
+  background-size: 50px 50px;
+  background-image: linear-gradient(to right, var(--grid-line-color-light) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-line-color-light) 1px, transparent 1px);
+  background-color: var(--grid-bg-light);
+  animation: moveGrid 40s linear infinite;
+  transition: background-color 0.5s ease;
+}
+
+.dark-mode .animated-grid-background {
+  background-image: linear-gradient(to right, var(--grid-line-color-dark) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-line-color-dark) 1px, transparent 1px);
+  background-color: var(--grid-bg-dark);
+}
+
+@keyframes moveGrid {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -1000px -1000px;
+  }
+}

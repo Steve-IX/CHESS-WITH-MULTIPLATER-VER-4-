@@ -13,7 +13,11 @@ interface Track {
   coverArt?: string;
 }
 
-export const MusicPlayer = () => {
+interface MusicPlayerProps {
+  isChatOpen?: boolean;
+}
+
+export const MusicPlayer = ({ isChatOpen = false }: MusicPlayerProps) => {
   // Actual playlist from the reference repository
   const originalPlaylist: Track[] = [
     {
@@ -642,7 +646,7 @@ export const MusicPlayer = () => {
         initial={{ opacity: 0, y: 100, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut", delay: 1 }}
-        className={`fixed bottom-6 right-6 z-50 ${isMinimized ? 'w-20 h-20' : 'w-96'} transition-all duration-500`}
+        className={`fixed bottom-6 right-6 ${isChatOpen ? 'z-20' : 'z-50'} ${isMinimized ? 'w-20 h-20' : 'w-96'} transition-all duration-500`}
       >
         {/* Chess-themed background with animated elements */}
         <div className="relative">

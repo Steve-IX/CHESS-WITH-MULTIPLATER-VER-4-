@@ -8,6 +8,7 @@ import { chessAI } from '../lib/ai';
 import { chessSocket } from '../lib/socket';
 import { getThemeById } from '../lib/themes';
 import { Clock, Play, Pause, RefreshCw, Home } from 'lucide-react';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 const PIECE_SYMBOLS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -557,23 +558,14 @@ export function ChessGame(props: ChessGameProps) {
     return piece?.type === 'king' && piece.color === gameState.currentPlayer && gameState.isCheck;
   };
 
+  const displayedBoard = playerColor === 'white' ? gameState.board : [...gameState.board].reverse().map(row => [...row].reverse());
+
   return (
-    <div className={`min-h-screen p-6 ${
-      themeId === 'crystal' 
-        ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden' 
-        : 'bg-gradient-to-br from-slate-100 to-slate-200'
-    }`}>
-      {/* Crystal theme background effects */}
-      {themeId === 'crystal' && (
-        <>
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-blue-100/20 to-purple-100/10" />
-          <div className="absolute top-0 left-0 w-full h-full">
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-radial from-white/30 to-transparent rounded-full blur-3xl" />
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-radial from-blue-200/40 to-transparent rounded-full blur-3xl" />
-            <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-gradient-radial from-purple-200/30 to-transparent rounded-full blur-2xl" />
-          </div>
-        </>
-      )}
+    <div className="min-h-screen w-full flex items-center justify-center p-6 animated-grid-background relative">
+      <div className="absolute top-4 left-4 z-20">
+        <ThemeToggleButton />
+      </div>
+
       <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start relative z-10">
         {/* Timer Panel - Left Side */}
         {gameState.timer && (

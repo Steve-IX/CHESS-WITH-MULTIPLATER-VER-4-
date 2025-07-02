@@ -7,12 +7,14 @@ import { chessSocket } from '@/lib/socket';
 import { PlayerColor, GameResult, Move, GameState, ThemeId, TimerMode } from '@/lib/types';
 import { useTheme } from '@/lib/ThemeContext';
 import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, RefreshCw, Home, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 interface OnlineChessProps {
   onBack: () => void;
   selectedTheme: ThemeId;
   timerMode: TimerMode;
   customTime: number;
+  onChatToggle?: (isOpen: boolean) => void;
 }
 
 interface ChatMessage {
@@ -23,7 +25,7 @@ interface ChatMessage {
   timestamp: Date;
 }
 
-export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: OnlineChessProps) {
+export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onChatToggle }: OnlineChessProps) {
   const [gamePhase, setGamePhase] = useState<'menu' | 'waiting' | 'playing'>('menu');
   const [roomId, setRoomId] = useState<string>('');
   const [playerColor, setPlayerColor] = useState<PlayerColor | null>(null);
@@ -376,10 +378,12 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   };
 
   const toggleChat = () => {
-    setShowChat(!showChat);
-    if (!showChat) {
+    const newShowChat = !showChat;
+    setShowChat(newShowChat);
+    if (newShowChat) {
       setUnreadMessages(0);
     }
+    onChatToggle?.(newShowChat);
   };
 
   // Connection status indicator
@@ -631,8 +635,13 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime }: On
   // Playing phase
   return (
     <div className="min-h-screen relative">
+      {/* Theme toggle button */}
+      <div className="absolute top-4 left-4 z-30">
+        <ThemeToggleButton />
+      </div>
+
       {/* Game header */}
-      <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between">
+      <div className="absolute top-4 left-20 right-4 z-20 flex items-center justify-between">
         <motion.button
           onClick={onBack}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${

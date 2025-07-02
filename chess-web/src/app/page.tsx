@@ -17,6 +17,7 @@ export default function Home() {
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [timerMode, setTimerMode] = useState<TimerMode>('none');
   const [customTime, setCustomTime] = useState<number>(15);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleGameStart = (
     mode: GameMode, 
@@ -106,8 +107,9 @@ export default function Home() {
           selectedTheme={selectedTheme}
           timerMode={timerMode}
           customTime={customTime}
+          onChatToggle={setIsChatOpen}
         />
-        <MusicPlayer />
+        <MusicPlayer isChatOpen={isChatOpen} />
       </>
     );
   }
