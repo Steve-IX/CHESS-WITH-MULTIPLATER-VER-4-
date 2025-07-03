@@ -2,7 +2,7 @@ export type PieceType = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king'
 export type PlayerColor = 'white' | 'black';
 export type GameMode = 'local' | 'computer' | 'online';
 export type Difficulty = 'easy' | 'medium' | 'hard';
-export type ThemeId = 'classic' | 'neo' | 'glassy' | 'ocean' | 'forest' | 'crystal';
+export type ThemeId = 'classic' | 'neo' | 'glassy' | 'ocean' | 'forest' | 'crystal' | 'red' | 'pink';
 export type TimerMode = '3min' | '5min' | '10min' | 'custom' | 'none';
 
 export interface Position {

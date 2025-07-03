@@ -50,6 +50,20 @@ module.exports = {
     'bg-clip-text', 'text-transparent', 'backdrop-blur-xl', 'rounded-3xl',
     'from-blue-300', 'to-purple-300', 'brightness-110', '-skew-x-12',
     'opacity-5', 'opacity-10', 'opacity-12', 'opacity-15',
+    
+    // Red theme colors
+    'bg-red-50', 'bg-red-800',
+    'border-red-900',
+    'ring-red-700',
+    'text-red-50', 'text-red-950',
+    'text-red-700', 'text-red-200',
+    
+    // Pink theme colors
+    'bg-pink-50', 'bg-pink-800',
+    'border-pink-900',
+    'ring-pink-700',
+    'text-pink-50', 'text-pink-950',
+    'text-pink-700', 'text-pink-200',
   ],
   theme: {
     extend: {

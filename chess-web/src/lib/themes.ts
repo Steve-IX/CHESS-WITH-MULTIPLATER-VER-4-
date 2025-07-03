@@ -125,6 +125,48 @@ export const chessThemes: ChessTheme[] = [
     backgroundDark: 'linear-gradient(135deg, #0c1445 0%, #1e1b4b 25%, #312e81 50%, #4c1d95 75%, #581c87 100%)',
     gridColorLight: 'rgba(147, 197, 253, 0.4)',
     gridColorDark: 'rgba(67, 56, 202, 0.4)'
+  },
+  {
+    id: 'red',
+    name: 'Radiant Red',
+    description: 'Vibrant red theme with matching light and dark mode',
+    lightSquare: 'bg-red-50',
+    darkSquare: 'bg-red-800',
+    boardBorder: 'border-red-900',
+    boardRing: 'ring-2 ring-red-700 ring-opacity-25',
+    whitePieceColor: 'text-red-50',
+    blackPieceColor: 'text-red-950',
+    whitePieceShadow: 'drop-shadow-lg',
+    blackPieceShadow: 'drop-shadow-md',
+    whitePieceTextShadow: '2px 2px 0px #991b1b, -1px -1px 0px #991b1b, 1px -1px 0px #991b1b, -1px 1px 0px #991b1b',
+    blackPieceTextShadow: '2px 2px 0px #fee2e2, -1px -1px 0px #fee2e2, 1px -1px 0px #fee2e2, -1px 1px 0px #fee2e2',
+    coordinateLight: 'text-red-700',
+    coordinateDark: 'text-red-200',
+    backgroundLight: '#fef2f2',
+    backgroundDark: '#450a0a',
+    gridColorLight: 'rgba(239, 68, 68, 0.7)',
+    gridColorDark: 'rgba(185, 28, 28, 0.6)'
+  },
+  {
+    id: 'pink',
+    name: 'Pastel Pink',
+    description: 'Soft pink theme with a charming touch for light and dark mode',
+    lightSquare: 'bg-pink-50',
+    darkSquare: 'bg-pink-800',
+    boardBorder: 'border-pink-900',
+    boardRing: 'ring-2 ring-pink-700 ring-opacity-25',
+    whitePieceColor: 'text-pink-50',
+    blackPieceColor: 'text-pink-950',
+    whitePieceShadow: 'drop-shadow-lg',
+    blackPieceShadow: 'drop-shadow-md',
+    whitePieceTextShadow: '2px 2px 0px #9d174d, -1px -1px 0px #9d174d, 1px -1px 0px #9d174d, -1px 1px 0px #9d174d',
+    blackPieceTextShadow: '2px 2px 0px #fce7f3, -1px -1px 0px #fce7f3, 1px -1px 0px #fce7f3, -1px 1px 0px #fce7f3',
+    coordinateLight: 'text-pink-700',
+    coordinateDark: 'text-pink-200',
+    backgroundLight: '#fdf2f8',
+    backgroundDark: '#500724',
+    gridColorLight: 'rgba(236, 73, 153, 0.7)',
+    gridColorDark: 'rgba(190, 24, 93, 0.6)'
   }
 ];
 

@@ -94,6 +94,32 @@ body {
                     var(--bg-gradient, linear-gradient(135deg, #0c1445 0%, #1e1b4b 25%, #312e81 50%, #4c1d95 75%, #581c87 100%));
 }
 
+/* Red theme */
+.animated-grid-background.theme-red {
+  background-color: var(--bg-color, #fef2f2);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(239, 68, 68, 0.7)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(239, 68, 68, 0.7)) 1px, transparent 1px);
+}
+
+.dark-mode .animated-grid-background.theme-red {
+  background-color: var(--bg-color, #450a0a);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(185, 28, 28, 0.6)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(185, 28, 28, 0.6)) 1px, transparent 1px);
+}
+
+/* Pink theme */
+.animated-grid-background.theme-pink {
+  background-color: var(--bg-color, #fdf2f8);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(236, 73, 153, 0.7)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(236, 73, 153, 0.7)) 1px, transparent 1px);
+}
+
+.dark-mode .animated-grid-background.theme-pink {
+  background-color: var(--bg-color, #500724);
+  background-image: linear-gradient(to right, var(--grid-color, rgba(190, 24, 93, 0.6)) 1px, transparent 1px),
+                    linear-gradient(to bottom, var(--grid-color, rgba(190, 24, 93, 0.6)) 1px, transparent 1px);
+}
+
 @keyframes moveGrid {
   from {
     background-position: 0 0;
