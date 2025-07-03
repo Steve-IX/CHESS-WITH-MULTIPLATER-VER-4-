@@ -6,9 +6,11 @@ import { GameMenu } from '../components/GameMenu';
 import { ThemeSelector } from '../components/ThemeSelector';
 import { MusicPlayer } from '../components/MusicPlayer';
 import { OnlineChess } from '../components/OnlineChess';
+import { TitleScreen } from '../components/TitleScreen';
 import { GameMode, Difficulty, GameResult, ThemeId, TimerMode } from '../lib/types';
 
 export default function Home() {
+  const [showTitleScreen, setShowTitleScreen] = useState(true);
   const [currentMode, setCurrentMode] = useState<GameMode | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -72,6 +74,15 @@ export default function Home() {
   const handleBackFromThemes = () => {
     setShowThemeSelector(false);
   };
+
+  const handleTitleScreenComplete = () => {
+    setShowTitleScreen(false);
+  };
+
+  // Show title screen first
+  if (showTitleScreen) {
+    return <TitleScreen onStart={handleTitleScreenComplete} />;
+  }
 
   if (showThemeSelector) {
     return (

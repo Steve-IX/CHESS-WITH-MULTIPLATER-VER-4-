@@ -573,7 +573,7 @@ export function ChessGame(props: ChessGameProps) {
     >
       <div className="absolute top-4 left-4 z-20">
         <ThemeToggleButton />
-      </div>
+          </div>
 
       <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start relative z-10">
         {/* Timer Panel - Left Side */}
