@@ -439,6 +439,24 @@ export function ChessGame(props: ChessGameProps) {
     }
   }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking, getActualCoordinates]);
 
+  // Helper function to generate a consistent game ID from game state
+  const generateGameId = (gameState: GameState): string => {
+    // Create a hash from the move history to ensure consistent IDs for the same game
+    const moveHistoryString = gameState.moveHistory
+      .map(move => `${move.from.x}${move.from.y}${move.to.x}${move.to.y}${move.piece.type}${move.piece.color}`)
+      .join('');
+    
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < moveHistoryString.length; i++) {
+      const char = moveHistoryString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return `game-${Math.abs(hash)}`;
+  };
+
   // Update handleGameCompletion to handle online games
   const handleGameCompletion = async (finalGameState: GameState) => {
     if (finalGameState.moveHistory.length < 10) {
@@ -449,11 +467,11 @@ export function ChessGame(props: ChessGameProps) {
     try {
       setIsAnalyzing(true);
       
-      // Generate a unique game ID
-      const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Generate a consistent game ID based on the game state
+      const gameId = generateGameId(finalGameState);
       
       // Check if we already have analysis for this game
-      const existingAnalysis = await getGameAnalysis(finalGameState);
+      const existingAnalysis = await getGameAnalysis(gameId);
       if (existingAnalysis) {
         setGameAnalysis(existingAnalysis);
         setIsAnalyzing(false);
@@ -466,7 +484,7 @@ export function ChessGame(props: ChessGameProps) {
       });
 
       // Save analysis result
-      await saveGameAnalysis(finalGameState, analysis);
+      await saveGameAnalysis(analysis);
       
       setGameAnalysis(analysis);
       setIsAnalyzing(false);
