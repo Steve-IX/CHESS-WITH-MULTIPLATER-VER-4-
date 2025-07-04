@@ -5,6 +5,11 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
 export type ThemeId = 'classic' | 'neo' | 'glassy' | 'ocean' | 'forest' | 'crystal' | 'red' | 'pink';
 export type TimerMode = '3min' | '5min' | '10min' | 'custom' | 'none';
 
+// Analysis types for game review
+export type MoveQuality = 'best' | 'great' | 'mistake' | 'miss' | 'blunder' | 'brilliant';
+export type GamePhase = 'opening' | 'middlegame' | 'endgame';
+export type PhaseRating = 'excellent' | 'good' | 'dubious';
+
 export interface Position {
   x: number;
   y: number;
@@ -49,6 +54,76 @@ export interface GameState {
   halfmoveClock: number;
   fullmoveNumber: number;
   timer?: TimerState;
+}
+
+// Game analysis types
+export interface MoveAnalysis {
+  ply: number; // Half-move number (starts at 1)
+  move: Move;
+  playerColor: PlayerColor;
+  bestMoveCp: number; // Best move evaluation in centipawns
+  playedMoveCp: number; // Played move evaluation in centipawns
+  cpLoss: number; // Centipawn loss (absolute difference)
+  quality: MoveQuality;
+  bestMove?: Move; // Stockfish suggested best move
+  isTactical?: boolean; // Move involves tactical gain/loss
+  phase: GamePhase;
+}
+
+export interface PhaseAnalysis {
+  phase: GamePhase;
+  whiteAccuracy: number;
+  blackAccuracy: number;
+  whiteRating: PhaseRating;
+  blackRating: PhaseRating;
+  startPly: number;
+  endPly: number;
+}
+
+export interface PlayerStats {
+  accuracy: number;
+  brilliant: number;
+  great: number;
+  best: number;
+  mistake: number;
+  miss: number;
+  blunder: number;
+}
+
+export interface GameAnalysis {
+  gameId: string;
+  white: PlayerStats;
+  black: PlayerStats;
+  phases: PhaseAnalysis[];
+  moves: MoveAnalysis[];
+  cpSeries: Array<{ ply: number; cp: number; color: PlayerColor }>;
+  isAnalysisComplete: boolean;
+  analyzedAt: Date;
+}
+
+export interface AnalysisProgress {
+  currentPly: number;
+  totalPlies: number;
+  isAnalyzing: boolean;
+  estimatedTimeRemaining?: number;
+}
+
+// Stockfish engine types
+export interface StockfishConfig {
+  depth: number;
+  multiPV: number;
+  threads: number;
+  hash: number;
+}
+
+export interface StockfishEvaluation {
+  score: number; // Centipawns
+  bestMove: string; // UCI notation
+  pv: string[]; // Principal variation
+  depth: number;
+  nodes: number;
+  time: number;
+  nps: number; // Nodes per second
 }
 
 export interface ChessGameProps {

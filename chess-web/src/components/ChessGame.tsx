@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode, GameResult } from '../lib/types';
+import { ChessGameProps, Position, Piece, Move, PlayerColor, GameState, GameMode, Difficulty, ThemeId, TimerState, TimerMode, GameResult, GameAnalysis, AnalysisProgress } from '../lib/types';
 import { calculateLegalMoves, makeMove, createInitialBoard, generateMoveNotation, isInCheck, getAllLegalMoves } from '../lib/chess';
 import { chessAI } from '../lib/ai';
 import { chessSocket } from '../lib/socket';
 import { getThemeById } from '../lib/themes';
-import { Clock, Play, Pause, RefreshCw, Home } from 'lucide-react';
+import { queueFullAnalysis } from '../lib/analysis';
+import { saveGameAnalysis, getGameAnalysis } from '../lib/database';
+import { Clock, Play, Pause, RefreshCw, Home, BarChart3 } from 'lucide-react';
 import { ThemeToggleButton } from './ThemeToggleButton';
 import { useTheme } from '../lib/ThemeContext';
+import { GameReview } from './GameReview';
 
 const PIECE_SYMBOLS = {
   white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -161,6 +164,13 @@ export function ChessGame(props: ChessGameProps) {
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   
+  // Game analysis state
+  const [gameAnalysis, setGameAnalysis] = useState<GameAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
+  const [showAnalysisTab, setShowAnalysisTab] = useState(false);
+  const [isReviewMode, setIsReviewMode] = useState(false);
+  
   // Update internal game state when external game state changes
   useEffect(() => {
     if (externalGameState && gameMode === 'online') {
@@ -182,7 +192,7 @@ export function ChessGame(props: ChessGameProps) {
 
   // Timer countdown effect
   useEffect(() => {
-    if (!gameState.timer || !gameState.timer.isActive || isTimerPaused || gameState.isCheckmate || gameState.isStalemate) {
+    if (!gameState.timer || !gameState.timer.isActive || isTimerPaused || gameState.isCheckmate || gameState.isStalemate || isReviewMode) {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
@@ -236,7 +246,7 @@ export function ChessGame(props: ChessGameProps) {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [gameState.timer?.isActive, gameState.currentPlayer, isTimerPaused, gameState.isCheckmate, gameState.isStalemate, onGameOver, gameMode]);
+  }, [gameState.timer?.isActive, gameState.currentPlayer, isTimerPaused, gameState.isCheckmate, gameState.isStalemate, isReviewMode, onGameOver, gameMode]);
 
   // Initialize multiplayer if needed
   useEffect(() => {
@@ -252,7 +262,8 @@ export function ChessGame(props: ChessGameProps) {
         !gameState.isCheckmate && 
         !gameState.isStalemate &&
         !isAnimating &&
-        !isAIThinking) {
+        !isAIThinking &&
+        !isReviewMode) {
       
       const timer = setTimeout(() => {
         makeAIMove();
@@ -260,7 +271,7 @@ export function ChessGame(props: ChessGameProps) {
       
       return () => clearTimeout(timer);
     }
-  }, [gameState.currentPlayer, gameMode, playerColor, isAnimating, isAIThinking]);
+  }, [gameState.currentPlayer, gameMode, playerColor, isAnimating, isAIThinking, isReviewMode]);
 
   // Update game status
   useEffect(() => {
@@ -289,7 +300,7 @@ export function ChessGame(props: ChessGameProps) {
   };
 
   const makeAIMove = async () => {
-    if (isAIThinking) return;
+    if (isAIThinking || isReviewMode) return;
     
     setIsAIThinking(true);
     
@@ -366,7 +377,7 @@ export function ChessGame(props: ChessGameProps) {
   }, [gameMode, playerColor]);
 
   const handleSquareClick = useCallback(async (displayPosition: Position) => {
-    if (isAnimating || isAIThinking) return;
+    if (isAnimating || isAIThinking || isReviewMode) return;
     
     // Convert display coordinates to actual board coordinates
     const actualPosition = getActualCoordinates(displayPosition.x, displayPosition.y);
@@ -411,6 +422,52 @@ export function ChessGame(props: ChessGameProps) {
       }
     }
   }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking, getActualCoordinates]);
+
+  // Handle game completion and trigger analysis
+  const handleGameCompletion = async (finalGameState: GameState) => {
+    // Only analyze games with meaningful length (at least 10 moves)
+    if (finalGameState.moveHistory.length < 10) {
+      console.log('⚠️ Game too short for analysis');
+      return;
+    }
+
+    try {
+      const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`🎯 Game completed! Starting analysis for ${gameId}`);
+      
+      setIsAnalyzing(true);
+      setAnalysisProgress({
+        currentPly: 0,
+        totalPlies: finalGameState.moveHistory.length,
+        isAnalyzing: true
+      });
+
+      // Queue full analysis
+      const analysis = await queueFullAnalysis(
+        finalGameState,
+        gameId,
+        (progress: AnalysisProgress) => {
+          setAnalysisProgress(progress);
+        }
+      );
+
+      // Save analysis to database
+      await saveGameAnalysis(analysis);
+      
+      // Update UI state
+      setGameAnalysis(analysis);
+      setIsAnalyzing(false);
+      setAnalysisProgress(null);
+      setShowAnalysisTab(true);
+      
+      console.log('✅ Game analysis completed and saved!');
+      
+    } catch (error) {
+      console.error('❌ Failed to analyze game:', error);
+      setIsAnalyzing(false);
+      setAnalysisProgress(null);
+    }
+  };
 
   const handleMove = async (move: Move) => {
     setIsAnimating(true);
@@ -457,6 +514,9 @@ export function ChessGame(props: ChessGameProps) {
           setShowGameOverModal(true);
         }
         
+        // Trigger game analysis on completion
+        handleGameCompletion(newGameState);
+        
         onGameOver?.(result);
       } else if (newGameState.isStalemate) {
         const result: GameResult = { winner: 'draw', reason: 'stalemate' };
@@ -466,6 +526,9 @@ export function ChessGame(props: ChessGameProps) {
           setGameResult(result);
           setShowGameOverModal(true);
         }
+        
+        // Trigger game analysis on completion
+        handleGameCompletion(newGameState);
         
         onGameOver?.(result);
       }
@@ -509,6 +572,13 @@ export function ChessGame(props: ChessGameProps) {
     setHasGameStarted(false);
     setGameResult(null);
     setShowGameOverModal(false);
+    
+    // Clear analysis data
+    setGameAnalysis(null);
+    setIsAnalyzing(false);
+    setAnalysisProgress(null);
+    setShowAnalysisTab(false);
+    setIsReviewMode(false);
   };
 
   const handleNewGame = () => {
@@ -522,6 +592,23 @@ export function ChessGame(props: ChessGameProps) {
     } else {
       // Fallback to just resetting the game
       resetGame();
+    }
+  };
+
+  const handleReviewGame = () => {
+    // Close the game over modal
+    setShowGameOverModal(false);
+    
+    // Enter review mode
+    setIsReviewMode(true);
+    
+    // Switch to the Game Review tab
+    setShowAnalysisTab(true);
+    
+    // If analysis hasn't started yet, start it
+    if (!gameAnalysis && !isAnalyzing && gameState.moveHistory.length >= 10) {
+      const gameId = `game-${Date.now()}`;
+      handleGameCompletion(gameState);
     }
   };
 
@@ -664,6 +751,16 @@ export function ChessGame(props: ChessGameProps) {
             <div className="text-lg font-semibold text-slate-600">
               {gameStatus}
             </div>
+            {isReviewMode && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-800 rounded-lg border border-purple-200 shadow-sm"
+              >
+                <BarChart3 size={16} />
+                <span className="font-medium">Review Mode</span>
+              </motion.div>
+            )}
           </div>
 
           <div className="relative">
@@ -693,7 +790,7 @@ export function ChessGame(props: ChessGameProps) {
                       hover:brightness-110 transition-all duration-200
                       ${isHovered ? 'bg-opacity-80' : ''}
                     `}
-                    onClick={() => handleSquareClick({ x: displayX, y: displayY })}
+                    onClick={() => !isReviewMode && handleSquareClick({ x: displayX, y: displayY })}
                     onMouseEnter={() => setHoveredSquare(actualCoords)}
                     onMouseLeave={() => setHoveredSquare(null)}
                     whileHover={{ scale: 1.02 }}
@@ -749,33 +846,65 @@ export function ChessGame(props: ChessGameProps) {
           transition={{ duration: 0.3, ease: 'easeInOut' }}
         >
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            {/* Panel Header with Minimize Button */}
-            <div className="flex items-center justify-between p-4 bg-slate-50 border-b border-slate-200">
+            {/* Panel Header with Tabs and Minimize Button */}
+            <div className="bg-slate-50 border-b border-slate-200">
               {!isPanelMinimized && (
-                <motion.h3 
-                  className="text-lg font-semibold text-slate-800"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  Game Info
-                </motion.h3>
+                <div className="flex items-center justify-between px-4 pt-4">
+                  <div className="flex bg-slate-200 rounded-lg p-1">
+                    <button
+                      onClick={() => setShowAnalysisTab(false)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
+                        !showAnalysisTab 
+                          ? 'bg-white text-slate-800 shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                    >
+                      Game Info
+                    </button>
+                    <button
+                      onClick={() => setShowAnalysisTab(true)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-all relative ${
+                        showAnalysisTab 
+                          ? 'bg-white text-slate-800 shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                    >
+                      Game Review
+                      {(gameAnalysis || isAnalyzing) && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+                      )}
+                    </button>
+                  </div>
+                  <motion.button
+                    onClick={() => setIsPanelMinimized(!isPanelMinimized)}
+                    className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title={isPanelMinimized ? 'Expand panel' : 'Minimize panel'}
+                  >
+                    <motion.div
+                      animate={{ rotate: isPanelMinimized ? 180 : 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {isPanelMinimized ? '→' : '←'}
+                    </motion.div>
+                  </motion.button>
+                </div>
               )}
-              <motion.button
-                onClick={() => setIsPanelMinimized(!isPanelMinimized)}
-                className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title={isPanelMinimized ? 'Expand panel' : 'Minimize panel'}
-              >
-                <motion.div
-                  animate={{ rotate: isPanelMinimized ? 180 : 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {isPanelMinimized ? '→' : '←'}
-                </motion.div>
-              </motion.button>
+              
+              {!isPanelMinimized && (
+                <div className="px-4 pb-4">
+                  <motion.h3 
+                    className="text-lg font-semibold text-slate-800"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {showAnalysisTab ? 'Game Review' : 'Game Info'}
+                  </motion.h3>
+                </div>
+              )}
             </div>
 
             <AnimatePresence>
@@ -785,106 +914,130 @@ export function ChessGame(props: ChessGameProps) {
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="p-6 space-y-6"
+                  className="p-6"
                 >
-                  {/* Game Mode Info */}
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-2">
-                      {gameMode === 'computer' && `vs AI (${difficulty})`}
-                      {gameMode === 'local' && 'Local Multiplayer'}
-                      {gameMode === 'online' && (roomId ? `Room: ${roomId}` : 'Online Game')}
-                    </h3>
-                    {isWaitingForOpponent && (
-                      <div className="text-yellow-600 font-medium">Waiting for opponent...</div>
-                    )}
-                  </div>
-
-                  {/* Captured Pieces */}
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by White</h4>
-                      <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
-                        {gameState.capturedPieces.white.map((piece, index) => (
-                          <div key={index} className="relative">
-                            <span 
-                              className={`
-                                text-xl font-bold
-                                ${piece.color === 'white' 
-                                  ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
-                                  : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
-                                }
-                              `}
-                              style={{
-                                textShadow: piece.color === 'white' 
-                                  ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
-                                  : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
-                              }}
-                            >
-                              {PIECE_SYMBOLS[piece.color][piece.type]}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by Black</h4>
-                      <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
-                        {gameState.capturedPieces.black.map((piece, index) => (
-                          <div key={index} className="relative">
-                            <span 
-                              className={`
-                                text-xl font-bold
-                                ${piece.color === 'white' 
-                                  ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
-                                  : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
-                                }
-                              `}
-                              style={{
-                                textShadow: piece.color === 'white' 
-                                  ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
-                                  : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
-                              }}
-                            >
-                              {PIECE_SYMBOLS[piece.color][piece.type]}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Move History */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-600 mb-2">Move History</h4>
-                    <div className="bg-slate-50 rounded p-3 max-h-48 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        {moveNotations.map((notation, index) => (
-                          <div key={index} className={`${index % 2 === 0 ? 'text-slate-800' : 'text-slate-600'}`}>
-                            {Math.floor(index / 2) + 1}{index % 2 === 0 ? '.' : '...'} {notation}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Game Controls */}
-                  <div className="space-y-3">
-                    <button
-                      onClick={resetGame}
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-                    >
-                      New Game
-                    </button>
-                    
-                    {gameMode === 'online' && roomId && (
+                  {!showAnalysisTab ? (
+                    // Game Info Tab Content
+                    <div className="space-y-6">
+                      {/* Game Mode Info */}
                       <div className="text-center">
-                        <p className="text-sm text-slate-600 mb-2">Share room code:</p>
-                        <div className="bg-slate-100 rounded px-3 py-2 font-mono text-lg font-bold text-center">
-                          {roomId}
+                        <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                          {gameMode === 'computer' && `vs AI (${difficulty})`}
+                          {gameMode === 'local' && 'Local Multiplayer'}
+                          {gameMode === 'online' && (roomId ? `Room: ${roomId}` : 'Online Game')}
+                        </h3>
+                        {isWaitingForOpponent && (
+                          <div className="text-yellow-600 font-medium">Waiting for opponent...</div>
+                        )}
+                      </div>
+
+                      {/* Captured Pieces */}
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by White</h4>
+                          <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
+                            {gameState.capturedPieces.white.map((piece, index) => (
+                              <div key={index} className="relative">
+                                <span 
+                                  className={`
+                                    text-xl font-bold
+                                    ${piece.color === 'white' 
+                                      ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
+                                      : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
+                                    }
+                                  `}
+                                  style={{
+                                    textShadow: piece.color === 'white' 
+                                      ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
+                                      : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
+                                  }}
+                                >
+                                  {PIECE_SYMBOLS[piece.color][piece.type]}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by Black</h4>
+                          <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
+                            {gameState.capturedPieces.black.map((piece, index) => (
+                              <div key={index} className="relative">
+                                <span 
+                                  className={`
+                                    text-xl font-bold
+                                    ${piece.color === 'white' 
+                                      ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
+                                      : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
+                                    }
+                                  `}
+                                  style={{
+                                    textShadow: piece.color === 'white' 
+                                      ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
+                                      : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
+                                  }}
+                                >
+                                  {PIECE_SYMBOLS[piece.color][piece.type]}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    )}
-                  </div>
+
+                      {/* Move History */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-600 mb-2">Move History</h4>
+                        <div className="bg-slate-50 rounded p-3 max-h-48 overflow-y-auto">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            {moveNotations.map((notation, index) => (
+                              <div key={index} className={`${index % 2 === 0 ? 'text-slate-800' : 'text-slate-600'}`}>
+                                {Math.floor(index / 2) + 1}{index % 2 === 0 ? '.' : '...'} {notation}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Game Controls */}
+                      <div className="space-y-3">
+                        {isReviewMode && (
+                          <button
+                            onClick={() => setIsReviewMode(false)}
+                            className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            <BarChart3 size={16} />
+                            Exit Review Mode
+                          </button>
+                        )}
+                        <button
+                          onClick={resetGame}
+                          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                        >
+                          New Game
+                        </button>
+                        
+                        {gameMode === 'online' && roomId && (
+                          <div className="text-center">
+                            <p className="text-sm text-slate-600 mb-2">Share room code:</p>
+                            <div className="bg-slate-100 rounded px-3 py-2 font-mono text-lg font-bold text-center">
+                              {roomId}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    // Game Review Tab Content
+                    <GameReview
+                      analysis={gameAnalysis}
+                      isAnalyzing={isAnalyzing}
+                      playerNames={{
+                        white: gameMode === 'computer' ? 'You' : 'White',
+                        black: gameMode === 'computer' ? `AI (${difficulty})` : 'Black'
+                      }}
+                    />
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -920,6 +1073,12 @@ export function ChessGame(props: ChessGameProps) {
                       {moveNotations.length}
                     </div>
                   )}
+                  
+                  {(gameAnalysis || isAnalyzing) && (
+                    <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs">
+                      {isAnalyzing ? '🔄' : '📊'}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -936,6 +1095,7 @@ export function ChessGame(props: ChessGameProps) {
             playerColor={playerColor}
             onNewGame={handleNewGame}
             onBackToMenu={handleBackToMenu}
+            onReviewGame={handleReviewGame}
             themeId={themeId}
           />
         )}
@@ -951,6 +1111,7 @@ const GameOverModal = ({
   playerColor,
   onNewGame,
   onBackToMenu,
+  onReviewGame,
   themeId
 }: {
   result: GameResult;
@@ -958,6 +1119,7 @@ const GameOverModal = ({
   playerColor: PlayerColor;
   onNewGame: () => void;
   onBackToMenu: () => void;
+  onReviewGame: () => void;
   themeId: ThemeId;
 }) => {
   const theme = getThemeById(themeId);
@@ -1021,6 +1183,20 @@ const GameOverModal = ({
         <p className="text-gray-600 mb-8 text-lg">{message}</p>
         
         <div className="space-y-4">
+          <motion.button
+            onClick={onReviewGame}
+            className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+              themeId === 'crystal'
+                ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-700 border border-purple-500/30'
+                : 'bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-300'
+            }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <BarChart3 size={16} className="inline mr-2" />
+            Review Game
+          </motion.button>
+
           <motion.button
             onClick={onNewGame}
             className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
