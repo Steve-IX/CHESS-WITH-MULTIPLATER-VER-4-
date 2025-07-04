@@ -168,7 +168,7 @@ export function ChessGame(props: ChessGameProps) {
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [showAnalysisTab, setShowAnalysisTab] = useState(false);
   const [isReviewMode, setIsReviewMode] = useState(false);
-
+  
   // Update internal game state when external game state changes
   useEffect(() => {
     if (externalGameState && gameMode === 'online') {
@@ -688,8 +688,9 @@ export function ChessGame(props: ChessGameProps) {
       } as React.CSSProperties}
     >
       <div className="absolute top-4 left-4 z-20">
-        <ThemeToggleButton />
-          </div>
+        {/* ThemeToggleButton will be rendered by parent for local/computer modes */}
+        {gameMode === 'online' && <ThemeToggleButton />}
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto justify-center items-start relative z-10">
         {/* Timer Panel - Left Side */}
@@ -878,7 +879,7 @@ export function ChessGame(props: ChessGameProps) {
             {/* Panel Header with Tabs and Minimize Button */}
             <div className="bg-slate-50 border-b border-slate-200">
               <div className="flex items-center justify-between px-4 pt-4">
-                {!isPanelMinimized && (
+              {!isPanelMinimized && (
                   <div className="flex bg-slate-200 rounded-lg p-1">
                     <button
                       onClick={() => setShowAnalysisTab(false)}
@@ -887,8 +888,8 @@ export function ChessGame(props: ChessGameProps) {
                           ? 'bg-white text-slate-800 shadow-sm' 
                           : 'text-slate-600 hover:text-slate-800'
                       }`}
-                    >
-                      Game Info
+                >
+                  Game Info
                     </button>
                     <button
                       onClick={() => setShowAnalysisTab(true)}
@@ -904,21 +905,21 @@ export function ChessGame(props: ChessGameProps) {
                       )}
                     </button>
                   </div>
-                )}
-                <motion.button
-                  onClick={() => setIsPanelMinimized(!isPanelMinimized)}
-                  className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  title={isPanelMinimized ? 'Expand panel' : 'Minimize panel'}
+              )}
+              <motion.button
+                onClick={() => setIsPanelMinimized(!isPanelMinimized)}
+                className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title={isPanelMinimized ? 'Expand panel' : 'Minimize panel'}
+              >
+                <motion.div
+                  animate={{ rotate: isPanelMinimized ? 180 : 0 }}
+                  transition={{ duration: 0.3 }}
                 >
-                  <motion.div
-                    animate={{ rotate: isPanelMinimized ? 180 : 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {isPanelMinimized ? '→' : '←'}
-                  </motion.div>
-                </motion.button>
+                  {isPanelMinimized ? '→' : '←'}
+                </motion.div>
+              </motion.button>
               </div>
               
               {!isPanelMinimized && (
@@ -948,88 +949,88 @@ export function ChessGame(props: ChessGameProps) {
                   {!showAnalysisTab ? (
                     // Game Info Tab Content
                     <div className="space-y-6">
-                      {/* Game Mode Info */}
-                      <div className="text-center">
-                        <h3 className="text-lg font-semibold text-slate-800 mb-2">
-                          {gameMode === 'computer' && `vs AI (${difficulty})`}
-                          {gameMode === 'local' && 'Local Multiplayer'}
-                          {gameMode === 'online' && (roomId ? `Room: ${roomId}` : 'Online Game')}
-                        </h3>
-                        {isWaitingForOpponent && (
-                          <div className="text-yellow-600 font-medium">Waiting for opponent...</div>
-                        )}
-                      </div>
+                  {/* Game Mode Info */}
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                      {gameMode === 'computer' && `vs AI (${difficulty})`}
+                      {gameMode === 'local' && 'Local Multiplayer'}
+                      {gameMode === 'online' && (roomId ? `Room: ${roomId}` : 'Online Game')}
+                    </h3>
+                    {isWaitingForOpponent && (
+                      <div className="text-yellow-600 font-medium">Waiting for opponent...</div>
+                    )}
+                  </div>
 
-                      {/* Captured Pieces */}
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by White</h4>
-                          <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
-                            {gameState.capturedPieces.white.map((piece, index) => (
-                              <div key={index} className="relative">
-                                <span 
-                                  className={`
-                                    text-xl font-bold
-                                    ${piece.color === 'white' 
-                                      ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
-                                      : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
-                                    }
-                                  `}
-                                  style={{
-                                    textShadow: piece.color === 'white' 
-                                      ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
-                                      : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
-                                  }}
-                                >
-                                  {PIECE_SYMBOLS[piece.color][piece.type]}
-                                </span>
-                              </div>
-                            ))}
+                  {/* Captured Pieces */}
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by White</h4>
+                      <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
+                        {gameState.capturedPieces.white.map((piece, index) => (
+                          <div key={index} className="relative">
+                            <span 
+                              className={`
+                                text-xl font-bold
+                                ${piece.color === 'white' 
+                                  ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
+                                  : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
+                                }
+                              `}
+                              style={{
+                                textShadow: piece.color === 'white' 
+                                  ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
+                                  : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
+                              }}
+                            >
+                              {PIECE_SYMBOLS[piece.color][piece.type]}
+                            </span>
                           </div>
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by Black</h4>
-                          <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
-                            {gameState.capturedPieces.black.map((piece, index) => (
-                              <div key={index} className="relative">
-                                <span 
-                                  className={`
-                                    text-xl font-bold
-                                    ${piece.color === 'white' 
-                                      ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
-                                      : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
-                                    }
-                                  `}
-                                  style={{
-                                    textShadow: piece.color === 'white' 
-                                      ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
-                                      : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
-                                  }}
-                                >
-                                  {PIECE_SYMBOLS[piece.color][piece.type]}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        ))}
                       </div>
-
-                      {/* Move History */}
-                      <div>
-                        <h4 className="text-sm font-semibold text-slate-600 mb-2">Move History</h4>
-                        <div className="bg-slate-50 rounded p-3 max-h-48 overflow-y-auto">
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            {moveNotations.map((notation, index) => (
-                              <div key={index} className={`${index % 2 === 0 ? 'text-slate-800' : 'text-slate-600'}`}>
-                                {Math.floor(index / 2) + 1}{index % 2 === 0 ? '.' : '...'} {notation}
-                              </div>
-                            ))}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-600 mb-2">Captured by Black</h4>
+                      <div className="flex flex-wrap gap-2 min-h-[2rem] bg-slate-50 rounded p-3">
+                        {gameState.capturedPieces.black.map((piece, index) => (
+                          <div key={index} className="relative">
+                            <span 
+                              className={`
+                                text-xl font-bold
+                                ${piece.color === 'white' 
+                                  ? 'text-gray-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' 
+                                  : 'text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.3)]'
+                                }
+                              `}
+                              style={{
+                                textShadow: piece.color === 'white' 
+                                  ? '1px 1px 0px #374151, -0.5px -0.5px 0px #374151'
+                                  : '1px 1px 0px #f9fafb, -0.5px -0.5px 0px #f9fafb'
+                              }}
+                            >
+                              {PIECE_SYMBOLS[piece.color][piece.type]}
+                            </span>
                           </div>
-                        </div>
+                        ))}
                       </div>
+                    </div>
+                  </div>
 
-                      {/* Game Controls */}
-                      <div className="space-y-3">
+                  {/* Move History */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-600 mb-2">Move History</h4>
+                    <div className="bg-slate-50 rounded p-3 max-h-48 overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {moveNotations.map((notation, index) => (
+                          <div key={index} className={`${index % 2 === 0 ? 'text-slate-800' : 'text-slate-600'}`}>
+                            {Math.floor(index / 2) + 1}{index % 2 === 0 ? '.' : '...'} {notation}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Game Controls */}
+                  <div className="space-y-3">
                         {isReviewMode && (
                           <button
                             onClick={() => setIsReviewMode(false)}
@@ -1039,22 +1040,22 @@ export function ChessGame(props: ChessGameProps) {
                             Exit Review Mode
                           </button>
                         )}
-                        <button
-                          onClick={resetGame}
-                          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-                        >
-                          New Game
-                        </button>
-                        
-                        {gameMode === 'online' && roomId && (
-                          <div className="text-center">
-                            <p className="text-sm text-slate-600 mb-2">Share room code:</p>
-                            <div className="bg-slate-100 rounded px-3 py-2 font-mono text-lg font-bold text-center">
-                              {roomId}
-                            </div>
-                          </div>
-                        )}
+                    <button
+                      onClick={resetGame}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                      New Game
+                    </button>
+                    
+                    {gameMode === 'online' && roomId && (
+                      <div className="text-center">
+                        <p className="text-sm text-slate-600 mb-2">Share room code:</p>
+                        <div className="bg-slate-100 rounded px-3 py-2 font-mono text-lg font-bold text-center">
+                          {roomId}
+                        </div>
                       </div>
+                    )}
+                  </div>
                     </div>
                   ) : (
                     // Game Review Tab Content

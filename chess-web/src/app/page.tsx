@@ -8,6 +8,7 @@ import { MusicPlayer } from '../components/MusicPlayer';
 import { OnlineChess } from '../components/OnlineChess';
 import { TitleScreen } from '../components/TitleScreen';
 import { GameMode, Difficulty, GameResult, ThemeId, TimerMode } from '../lib/types';
+import { ThemeToggleButton } from '../components/ThemeToggleButton';
 
 export default function Home() {
   const [showTitleScreen, setShowTitleScreen] = useState(true);
@@ -128,13 +129,15 @@ export default function Home() {
   return (
     <>
       <div className="relative">
-        <button
-          onClick={handleBackToMenu}
-          className="absolute top-4 left-4 z-10 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
-        >
-          ← Back to Menu
-        </button>
-        
+        <div className="flex items-center gap-3 absolute top-4 left-4 z-10">
+          <button
+            onClick={handleBackToMenu}
+            className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-colors"
+          >
+            ← Back to Menu
+          </button>
+          <ThemeToggleButton />
+        </div>
         <ChessGame
           gameMode={currentMode}
           difficulty={difficulty}
