@@ -715,7 +715,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
       {gameState && (
         <ChessGame
           gameMode="online"
-          playerColor={playerColor}
+          playerColor={playerColor || 'white'}
           isSpectator={false}
           gameState={gameState}
           onMove={handleMove}
