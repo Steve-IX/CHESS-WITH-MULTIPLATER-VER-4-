@@ -125,7 +125,7 @@ export class StockfishService {
             }
           };
           
-          this.engine.onerror = (error) => {
+          this.engine.onerror = (error: ErrorEvent) => {
             currentSourceIndex++;
             this.engine.terminate();
             setTimeout(tryNextSource, 500);
