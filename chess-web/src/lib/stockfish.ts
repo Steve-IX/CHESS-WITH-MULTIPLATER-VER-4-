@@ -30,45 +30,15 @@ export class StockfishService {
     this.initializationAttempts++;
     
     try {
-      console.log(`🔧 Attempting to initialize Stockfish (attempt ${this.initializationAttempts})`);
+      // Try Web Worker with multiple CDN fallbacks
+      await this.initializeWebWorkerEngine();
       
-      // Skip npm package due to compilation issues, go directly to Web Worker
-      if (this.initializationAttempts === 1) {
-        throw new Error('Skipping npm package, using Web Worker directly');
-      }
-      
-      // Try stockfish.js package (this code won't run due to the throw above)
-      const stockfishModule = await import('stockfish.js');
-      
-      if (typeof stockfishModule.default === 'function') {
-        this.engine = stockfishModule.default();
-      } else {
-        throw new Error('Invalid stockfish module format');
-      }
-      
-      this.engine.onmessage = (event: any) => {
-        this.handleEngineMessage(event.data || event);
-      };
-
-      // Send initial setup commands
-      this.sendCommand('uci');
-      this.sendCommand('isready');
-      
-      // Wait for engine to be ready
-      setTimeout(() => {
-        if (!this.isReady) {
-          this.isReady = true;
-          this.processMessageQueue();
-          console.log('✅ Stockfish.js package initialized successfully');
-        }
-      }, 1500);
-
     } catch (error) {
-      console.log('📦 Skipping npm package, using CDN Web Worker');
+      console.error('Failed to initialize Stockfish:', error);
       
       if (this.initializationAttempts < this.maxInitializationAttempts) {
-        // Try Web Worker fallback
-        this.initializeWebWorkerEngine();
+        // Retry with different approach
+        setTimeout(() => this.initializeEngine(), 1000);
       } else {
         // Final fallback
         this.initializeSimpleEvaluator();
@@ -76,50 +46,99 @@ export class StockfishService {
     }
   }
 
-  private initializeWebWorkerEngine(): void {
-    try {
-      // Check if we're in browser environment
-      if (typeof window === 'undefined') {
-        console.warn('Stockfish requires browser environment');
-        return;
-      }
+  private async initializeWebWorkerEngine(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Check if we're in browser environment
+        if (typeof window === 'undefined') {
+          reject(new Error('Stockfish requires browser environment'));
+          return;
+        }
 
-      // Create Web Worker with inline Stockfish
-      const workerBlob = new Blob([`
-        importScripts('https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/stockfish.js');
-        const stockfish = Stockfish();
-        
-        self.onmessage = function(e) {
-          stockfish.postMessage(e.data);
+        // Try multiple CDN sources
+        const cdnSources = [
+          'https://unpkg.com/stockfish@16.0.0/src/stockfish.js',
+          'https://cdn.jsdelivr.net/npm/stockfish@16.0.0/src/stockfish.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/stockfish/16.0.0/stockfish.js'
+        ];
+
+        let currentSourceIndex = 0;
+
+        const tryNextSource = () => {
+          if (currentSourceIndex >= cdnSources.length) {
+            reject(new Error('All CDN sources failed'));
+            return;
+          }
+
+          const source = cdnSources[currentSourceIndex];
+
+          // Create Web Worker with inline Stockfish
+          const workerBlob = new Blob([`
+            try {
+              importScripts('${source}');
+              const stockfish = Stockfish();
+              
+              self.onmessage = function(e) {
+                stockfish.postMessage(e.data);
+              };
+              
+              stockfish.onmessage = function(line) {
+                self.postMessage(line);
+              };
+              
+              // Signal success
+              self.postMessage('ready');
+            } catch (error) {
+              self.postMessage('error: ' + error.message);
+            }
+          `], { type: 'application/javascript' });
+          
+          const workerUrl = URL.createObjectURL(workerBlob);
+          this.engine = new Worker(workerUrl);
+          
+          this.engine.onmessage = (event: MessageEvent) => {
+            if (event.data === 'ready') {
+              // Successfully loaded
+              this.engine.onmessage = (event: MessageEvent) => {
+                this.handleEngineMessage(event.data);
+              };
+              
+              // Send initial setup commands
+              this.sendCommand('uci');
+              this.sendCommand('isready');
+              
+              setTimeout(() => {
+                this.isReady = true;
+                this.processMessageQueue();
+                console.log('✅ Stockfish initialized successfully');
+                resolve();
+              }, 2000);
+              
+            } else if (event.data.startsWith('error:')) {
+              // This source failed, try next
+              currentSourceIndex++;
+              this.engine.terminate();
+              setTimeout(tryNextSource, 500);
+            } else {
+              // Normal engine message
+              this.handleEngineMessage(event.data);
+            }
+          };
+          
+          this.engine.onerror = (error) => {
+            currentSourceIndex++;
+            this.engine.terminate();
+            setTimeout(tryNextSource, 500);
+          };
+          
         };
+
+        tryNextSource();
         
-        stockfish.onmessage = function(line) {
-          self.postMessage(line);
-        };
-      `], { type: 'application/javascript' });
-      
-      const workerUrl = URL.createObjectURL(workerBlob);
-      this.engine = new Worker(workerUrl);
-      
-      this.engine.onmessage = (event: MessageEvent) => {
-        this.handleEngineMessage(event.data);
-      };
-      
-      // Send initial setup commands
-      this.sendCommand('uci');
-      this.sendCommand('isready');
-      
-      setTimeout(() => {
-        this.isReady = true;
-        this.processMessageQueue();
-        console.log('✅ Stockfish Web Worker initialized successfully');
-      }, 2000);
-      
-    } catch (error) {
-      console.error('Failed to initialize Web Worker Stockfish:', error);
-      // Final fallback to simple evaluation
-      this.initializeSimpleEvaluator();
-    }
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   private initializeSimpleEvaluator(): void {
@@ -146,8 +165,6 @@ export class StockfishService {
   }
 
   private handleEngineMessage(message: string): void {
-    console.log('Stockfish:', message);
-    
     if (message.includes('readyok')) {
       this.isReady = true;
       this.processMessageQueue();

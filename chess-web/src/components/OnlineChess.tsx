@@ -6,7 +6,7 @@ import { ChessGame } from './ChessGame';
 import { chessSocket } from '@/lib/socket';
 import { PlayerColor, GameResult, Move, GameState, ThemeId, TimerMode } from '@/lib/types';
 import { useTheme } from '@/lib/ThemeContext';
-import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, RefreshCw, Home, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Copy, Users, MessageCircle, Crown, Wifi, WifiOff, Send, Flag, Handshake, X, RefreshCw, Home, ShieldCheck, ShieldAlert, BarChart3 } from 'lucide-react';
 import { ThemeToggleButton } from './ThemeToggleButton';
 import { getThemeById } from '@/lib/themes';
 
@@ -50,6 +50,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const [showDrawOfferModal, setShowDrawOfferModal] = useState(false);
   const [rematchOffer, setRematchOffer] = useState<{ from: PlayerColor } | null>(null);
+  const [isReviewMode, setIsReviewMode] = useState(false);
 
   const { theme } = useTheme();
   const chessTheme = getThemeById(selectedTheme);
@@ -373,6 +374,11 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
   const handleDeclineRematch = () => {
     chessSocket.declineRematch();
     setRematchOffer(null);
+  };
+
+  const handleReviewGame = () => {
+    setShowGameOverModal(false);
+    setIsReviewMode(true);
   };
 
   const copyRoomId = () => {
@@ -709,13 +715,15 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
       {gameState && (
         <ChessGame
           gameMode="online"
+          playerColor={playerColor}
+          isSpectator={false}
           gameState={gameState}
-          playerColor={playerColor || 'white'}
+          onMove={handleMove}
+          onGameOver={handleGameOver}
           themeId={selectedTheme}
           timerMode={timerMode}
           customTime={customTime}
-          onMove={handleMove}
-          onGameOver={handleGameOver}
+          isReviewMode={isReviewMode}
         />
       )}
 
@@ -727,6 +735,7 @@ export function OnlineChess({ onBack, selectedTheme, timerMode, customTime, onCh
             playerColor={playerColor!}
             onRematch={handleOfferRematch}
             onMenu={onBack}
+            onReview={handleReviewGame}
             rematchOffer={rematchOffer}
             onAcceptRematch={handleAcceptRematch}
             onDeclineRematch={handleDeclineRematch}
@@ -915,6 +924,7 @@ const GameOverModal = ({
   playerColor, 
   onRematch, 
   onMenu,
+  onReview,
   rematchOffer,
   onAcceptRematch,
   onDeclineRematch 
@@ -923,6 +933,7 @@ const GameOverModal = ({
   playerColor: PlayerColor;
   onRematch: () => void;
   onMenu: () => void;
+  onReview: () => void;
   rematchOffer: { from: PlayerColor } | null;
   onAcceptRematch: () => void;
   onDeclineRematch: () => void;
@@ -1014,6 +1025,20 @@ const GameOverModal = ({
               {haveYouOfferedRematch ? 'Waiting for opponent...' : 'Offer Rematch'}
             </motion.button>
           )}
+
+          <motion.button
+            onClick={onReview}
+            className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+              theme === 'dark'
+                ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30'
+                : 'bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-300'
+            }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <BarChart3 size={16} className="inline mr-2" />
+            Review Game
+          </motion.button>
 
           <motion.button
             onClick={onMenu}

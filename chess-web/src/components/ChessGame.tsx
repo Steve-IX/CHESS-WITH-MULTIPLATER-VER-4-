@@ -106,10 +106,8 @@ export function ChessGame(props: ChessGameProps) {
     onMove,
     onGameOver,
     onBackToMenu,
+    isReviewMode: externalIsReviewMode = false,
   } = props;
-  
-  // Debug logging for timer settings
-  console.log('🕐 ChessGame props:', { gameMode, timerMode, customTime, hasExternalState: !!externalGameState });
   
   // Initialize timer state
   const getInitialTimerState = (): TimerState | undefined => {
@@ -170,12 +168,10 @@ export function ChessGame(props: ChessGameProps) {
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress | null>(null);
   const [showAnalysisTab, setShowAnalysisTab] = useState(false);
   const [isReviewMode, setIsReviewMode] = useState(false);
-  
+
   // Update internal game state when external game state changes
   useEffect(() => {
     if (externalGameState && gameMode === 'online') {
-      console.log('🕐 Online game state updated:', externalGameState);
-      console.log('🕐 Timer state from server:', externalGameState.timer);
       setGameState(externalGameState);
       // Extract move notations from move history
       const notations = externalGameState.moveHistory.map(move => generateMoveNotation(move));
@@ -183,6 +179,11 @@ export function ChessGame(props: ChessGameProps) {
       setHasGameStarted(externalGameState.moveHistory.length > 0);
     }
   }, [externalGameState, gameMode]);
+  
+  // Sync external review mode with internal state
+  useEffect(() => {
+    setIsReviewMode(externalIsReviewMode);
+  }, [externalIsReviewMode]);
   
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -277,6 +278,21 @@ export function ChessGame(props: ChessGameProps) {
   useEffect(() => {
     updateGameStatus();
   }, [gameState, isAIThinking, gameMode, playerColor, difficulty]);
+
+  // Auto-trigger analysis when game is completed
+  useEffect(() => {
+    if ((gameState.isCheckmate || gameState.isStalemate) && 
+        gameState.moveHistory.length >= 10 && 
+        !gameAnalysis && 
+        !isAnalyzing) {
+      // Small delay to ensure game state is fully updated
+      const timer = setTimeout(() => {
+        handleGameCompletion(gameState);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.isCheckmate, gameState.isStalemate, gameState.moveHistory.length, gameAnalysis, isAnalyzing]);
 
   const initializeMultiplayer = async () => {
     try {
@@ -423,47 +439,43 @@ export function ChessGame(props: ChessGameProps) {
     }
   }, [selectedSquare, legalMoves, gameState, gameMode, playerColor, isAnimating, isAIThinking, getActualCoordinates]);
 
-  // Handle game completion and trigger analysis
+  // Update handleGameCompletion to handle online games
   const handleGameCompletion = async (finalGameState: GameState) => {
-    // Only analyze games with meaningful length (at least 10 moves)
     if (finalGameState.moveHistory.length < 10) {
-      console.log('⚠️ Game too short for analysis');
+      console.log('Game too short for analysis');
       return;
     }
 
     try {
-      const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log(`🎯 Game completed! Starting analysis for ${gameId}`);
-      
       setIsAnalyzing(true);
-      setAnalysisProgress({
-        currentPly: 0,
-        totalPlies: finalGameState.moveHistory.length,
-        isAnalyzing: true
+      
+      // Generate a unique game ID
+      const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Check if we already have analysis for this game
+      const existingAnalysis = await getGameAnalysis(finalGameState);
+      if (existingAnalysis) {
+        setGameAnalysis(existingAnalysis);
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // Start new analysis
+      const analysis = await queueFullAnalysis(finalGameState, gameId, (progress) => {
+        setAnalysisProgress(progress);
       });
 
-      // Queue full analysis
-      const analysis = await queueFullAnalysis(
-        finalGameState,
-        gameId,
-        (progress: AnalysisProgress) => {
-          setAnalysisProgress(progress);
-        }
-      );
-
-      // Save analysis to database
-      await saveGameAnalysis(analysis);
+      // Save analysis result
+      await saveGameAnalysis(finalGameState, analysis);
       
-      // Update UI state
       setGameAnalysis(analysis);
       setIsAnalyzing(false);
       setAnalysisProgress(null);
+      
+      // Ensure analysis tab is shown
       setShowAnalysisTab(true);
-      
-      console.log('✅ Game analysis completed and saved!');
-      
     } catch (error) {
-      console.error('❌ Failed to analyze game:', error);
+      console.error('Failed to analyze game:', error);
       setIsAnalyzing(false);
       setAnalysisProgress(null);
     }
@@ -607,7 +619,6 @@ export function ChessGame(props: ChessGameProps) {
     
     // If analysis hasn't started yet, start it
     if (!gameAnalysis && !isAnalyzing && gameState.moveHistory.length >= 10) {
-      const gameId = `game-${Date.now()}`;
       handleGameCompletion(gameState);
     }
   };
@@ -848,8 +859,8 @@ export function ChessGame(props: ChessGameProps) {
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
             {/* Panel Header with Tabs and Minimize Button */}
             <div className="bg-slate-50 border-b border-slate-200">
-              {!isPanelMinimized && (
-                <div className="flex items-center justify-between px-4 pt-4">
+              <div className="flex items-center justify-between px-4 pt-4">
+                {!isPanelMinimized && (
                   <div className="flex bg-slate-200 rounded-lg p-1">
                     <button
                       onClick={() => setShowAnalysisTab(false)}
@@ -875,22 +886,22 @@ export function ChessGame(props: ChessGameProps) {
                       )}
                     </button>
                   </div>
-                  <motion.button
-                    onClick={() => setIsPanelMinimized(!isPanelMinimized)}
-                    className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    title={isPanelMinimized ? 'Expand panel' : 'Minimize panel'}
+                )}
+                <motion.button
+                  onClick={() => setIsPanelMinimized(!isPanelMinimized)}
+                  className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  title={isPanelMinimized ? 'Expand panel' : 'Minimize panel'}
+                >
+                  <motion.div
+                    animate={{ rotate: isPanelMinimized ? 180 : 0 }}
+                    transition={{ duration: 0.3 }}
                   >
-                    <motion.div
-                      animate={{ rotate: isPanelMinimized ? 180 : 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      {isPanelMinimized ? '→' : '←'}
-                    </motion.div>
-                  </motion.button>
-                </div>
-              )}
+                    {isPanelMinimized ? '→' : '←'}
+                  </motion.div>
+                </motion.button>
+              </div>
               
               {!isPanelMinimized && (
                 <div className="px-4 pb-4">

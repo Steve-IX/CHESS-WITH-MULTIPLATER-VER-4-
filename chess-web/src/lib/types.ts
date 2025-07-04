@@ -135,6 +135,7 @@ export interface ChessGameProps {
   themeId?: ThemeId;
   timerMode?: TimerMode;
   customTime?: number;
+  isReviewMode?: boolean;
   onMove?: (move: Move) => void;
   onGameOver?: (result: GameResult) => void;
   onBackToMenu?: () => void;
